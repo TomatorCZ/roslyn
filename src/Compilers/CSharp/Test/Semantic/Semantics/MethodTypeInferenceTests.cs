@@ -1385,17 +1385,13 @@ public class GH
         }
 
         [Fact]
-        public void MethodTypeHints_TypeNameConflicts() 
+        public void TypeHints_WrongPlaces() 
         {
             var source = """
-public class A<_> 
+public class A<_> // Error
 {
-    public void F() 
-    {
-        D<_>(1); // Error: type _ is not predecesor of int + Warning: Conflicting name _
-    }
-
-    public void D<T>(T p1) {}
+    public static void Foo<_>() {} // Error
+    public static void Bar<T>(A<_> p1) {} // Error
 }
 """;
 
@@ -1578,25 +1574,6 @@ public class F1<T1, T2>
 {
     public F1(T2 p2) { }
 }
-""";
-
-            var compilation = CreateCSharpCompilation(source);
-        }
-
-        [Fact]
-        public void ConstructorTypeHints_TypeNameConflicts() 
-        {
-            var source = """
-public class A<_> 
-{
-    public void F() 
-    {
-        new D<_>(1); // Error: type _ is not predecesor of int + Warning: Conflicting name _
-    }
-}
-
-public class D<T> 
-{}
 """;
 
             var compilation = CreateCSharpCompilation(source);
