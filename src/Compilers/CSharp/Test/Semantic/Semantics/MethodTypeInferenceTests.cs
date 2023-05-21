@@ -1205,5 +1205,588 @@ public class Test
             var authorResultType = model.GetTypeInfo(authorResult).Type;
             Assert.Equal("Author", authorResultType.Name);
         }
+
+        #region MyTypeInference
+
+        [Fact]
+        public void MethodTypeHints_Simple() 
+        {
+            var source = """
+using System;
+
+public class Program
+{
+    public static void M1()
+    {
+        GH.F1<int, _>("hi"); // GH.F1<int, string>(string)
+        GH.F2<_, _>(1, 1); //  GH.F2<int, int>(int, int)
+        GH.F2<_>(1,1); // GH.F2<int>(int,int)
+        GH.F2(1,1); // GH.F2<int>(int,int)
+        GH.F3<int, _, string, _>(new GC2<byte, short>()); // GH.F3<int, byte, string, short>(GC2<byte, short>)
+        GH.F4<_, _, string>(intVal => intVal + 1, x => x.ToString(),str => str.Length); // // GH.F4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
+        GH.F5((byte)1); // GH.F5<byte>(byte)
+        GH.F5(1); // GH.F5(int)
+    }
+
+    public static void M2() 
+    {
+        B1<int, _>("hi"); // B1<int, string>(string)
+        B3<int, _, string, _>(new GC2<byte, short>()); // B3<int, byte, string, short>(GC2<byte, short>)
+        B4<_, _, string>(intVal => intVal + 1, x => x.ToString(),str => str.Length); // B4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
+
+        void B1<T1, T2>(T2 p2) {}
+
+        //Local functions don't have overloading
+
+        void B3<T1, T2, T3, T4>(GC2<T2, T4> p24) {}
+
+        void B4<T1, T2, T3>(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) {}
+
+        //Local functions don't have overloading
+    }
+}
+
+    public class GC2<T1, T2> {}
+    public class GC1<T1> {}
+
+    public class GH
+    {
+        public static void F1<T1, T2>(T2 p2) { }
+
+        public static void F2<T1>(T1 p1, int p2) { }
+        public static void F2<T1, T2>(T1 p1, T2 p2) { }
+
+        public static void F3<T1, T2, T3, T4>(GC2<T2, T4> p24) { }
+
+        public static void F4<T1, T2, T3>(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { }
+
+        public static void F5<T1>(T1 p1) {}
+        public static void F5(int p1) {}
+    }
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void MethodTypeHints_Nested() 
+        {
+            var source = """
+public class Program
+{
+    public static void M1()
+    {
+        B1<int> temp = new B1<int>();
+        B2<int, string> temp2 = new B2<int, string>();
+        C2<int, B> temp3 = new C2<int, B>()
+        
+        F1<A1<_>>(temp); // F1<A1<int>>(A1<int>)
+        F1<A2<_, string>>(temp2); // F1<A2<int, string>>
+        F1<I2<_, A>>(temp3); // F1<I2<int, A>>(I2<int, A>)
+    } 
+
+    public static void F1<T1>(T1 p1) {}
+}
+
+public class A {}
+public class B : A{}
+public class A1<T> {}
+public class A2<T1, T2> {}
+public class B1<T> : A1<T> {}
+public class B2<T1, T2> : A2<T1, T2> {}
+public interface I2<in T1, in T2> {}
+public class C2<T1, T2> : I2<T1, T2> {}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void MethodTypeHints_Nullability() 
+        {
+            var source = """
+#nullable enable
+
+public class Program
+{
+    public static void M1()
+    {
+        string? temp1 = null;
+        string temp2 = "";
+        C2<int, string> temp3 = new C2<int, string>();
+        F1<int, _>(temp1); // F1<int, string>(string?)
+        F1<int, _>(temp2); // F1<int, string>(string?)
+        F1<int?, _>(temp1); // F1<int, string>(string?)
+        F1<int?, _>(temp2); // F1<int, string>(string?)
+        F2<int, _>(temp1); // F2<int, string?>(string?)
+        F2<int, _>(temp2); // F2<int, string>(string)
+        F2<int?, _>(temp1); // F2<int, string?>(string?)
+        F2<int?, _>(temp2); // F2<int?, string>(string)
+        F<I2<_, string?>>(temp3); // F<I2<int, string?>>(C2<int, string?>)
+        F<C2<_, string?>>(temp3); // F<C2<int, string?>>(C2<int, string?>)
+    } 
+
+    public static void F1<T1, T2>(T2? p2) { }
+    public static void F2<T1, T2>(T2 p2) { }
+    public static void F<T1>(T1 p1) {}
+}
+
+public class A {}
+public interface I2<in T1, in T2> {}
+public class C2<T1, T2> : I2<T1, T2> {}
+""";
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void MethodTypeHints_Dynamic() 
+        {
+            var source = """
+public class Program
+{
+    public static void M1()
+    {
+        dynamic temp = "";
+        Foo<string,_>("", temp, 1); // Error typeof(p3) == string + Warnining -> hints will be not used in binding
+        Foo<int, string>(1, temp, 1); // Warnining -> hints will be not used in binding
+        temp.Foo<string, _>(temp); // Warning -> hints will be not used in binding 
+    }
+
+    public static void Foo<T1, T2>(T1 p1, T2 p2, T1 p3) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void MethodTypeHints_NotInferredRecovery() 
+        {
+            var source = """
+#nullable enable
+
+public class Program 
+{
+    public void M() 
+    {
+        GH.F1<_,_>(""); // Error: can't infer T1
+        GH.F1<_,int>(""); // Error: T2 == int
+        GH.F1<string,byte>(257); // Error: T2 = byte
+    }
+}
+
+public class GH
+{
+    public static void F1<T1, T2>(T2 p2) { }
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void MethodTypeHints_TypeNameConflicts() 
+        {
+            var source = """
+public class A<_> 
+{
+    public void F() 
+    {
+        D<_>(1); // Error: type _ is not predecesor of int + Warning: Conflicting name _
+    }
+
+    public void D<T>(T p1) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_Simple() 
+        {
+            var source = """
+using System;
+
+public class Program {}
+{
+    public static void M() 
+    {
+        new C1<int, _>("hi"); // C1<int, string>(string)
+        new C2<_, _>(1,1); // C2<int, int>(int, int)
+        new C2<_>(1,1); C2<int>(int, int)
+        new C2(1,1); // Error: C2 is not defined
+        new C3<int, _, string, _>(new GC2<byte, short>()); // C3<int, byte, string, short>(GC2<byte, short>)
+        new C4<_, _, string>(intVal => intVal + 1, x => x.ToString(), str => str.Length); // C4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
+        new C5((byte)1); // Error: typeof(p1) == int
+        new C5(1); // C5(int)
+    }
+}
+
+public class A<T> {}
+public class B<T> : A<T> {}
+
+public class C1<T1, T2> 
+{
+    public C1(T2 p2) { }    
+}
+
+public class C2<T1, T2> 
+{
+    public C2(T1 p1, T2 p2) { }
+}
+
+public class C2<T1> 
+{
+    public C2(T1 p1, int p2) { }
+}
+
+public class C3<T1, T2, T3, T4> 
+{
+    public C3(GC2<T2, T4> p24) { }
+}
+
+public class C4<T1, T2, T3> 
+{
+    public C4(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { }
+}
+
+public class C5<T1> 
+{
+    public C5(T1 p1) {}
+}
+
+public class C5 
+{
+    public C5(int p1) {}
+}
+""";
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_Nested() 
+        {
+            var source = """
+public class Program 
+{
+    public static void M1() {
+        var temp = new B<int>();
+    new C5<A<_>>(temp); // C5<A<int>>(A<int>)
+    }
+}
+public class A<T> {}
+public class B<T> : A<T> {}
+
+public class C5 
+{
+    public C5(int p1) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_Nullability() 
+        {
+            var source = """
+#nullable enable
+
+public class Program
+{
+    public static void M1()
+    {
+        string? temp1 = null;
+        string temp2 = "";
+        C2<int, string> temp3 = new C2<int, string>();
+        new F1<int, _>(temp1); // F1<int, string>(string?)
+        new F1<int, _>(temp2); // F1<int, string>(string?)
+        new F1<int?, _>(temp1); // F1<int, string>(string?)
+        new F1<int?, _>(temp2); // F1<int, string>(string?)
+        new F2<int, _>(temp1); // F2<int, string?>(string?)
+        new F2<int, _>(temp2); // F2<int, string>(string)
+        new F2<int?, _>(temp1); // F2<int, string?>(string?)
+        new F2<int?, _>(temp2); // F2<int?, string>(string)
+        new F<I2<_, string?>>(temp3); // F<I2<int, string?>>(C2<int, string?>)
+        new F<C2<_, string?>>(temp3); // F<C2<int, string?>>(C2<int, string?>)
+    } 
+
+}
+
+
+public class F1<T1, T2> 
+{
+    public F(T2? p2) { }
+}
+public class F2<T1, T2> 
+{
+    public F2(T2 p2) { }
+}
+public class F<T1, T2> 
+{
+    public F(T1 p1) {}
+}
+
+public class A {}
+public interface I2<in T1, in T2> {}
+public class C2<T1, T2> : I2<T1, T2> {}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_Dynamic() 
+        {
+            var source = """
+public class Program
+{
+    public static void M1()
+    {
+        dynamic temp = "";
+        var temp2 = new A<_, int>(temp, ""); // Error typeof(p2) == string + Warnining -> hints will be not used in binding
+    }
+}
+
+public class A<T1, T2> 
+{
+    public A(T1 p1, T2 p2) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_NotInferredRecovery() 
+        {
+            var source = """
+#nullable enable
+
+public class Program 
+{
+    public void M() 
+    {
+        new F1<_,_>(""); // Error: can't infer T1
+        new F1<_,int>(""); // Error: T2 == int
+        new F1<string,byte>(257); // Error: T2 = byte
+    }
+}
+
+public class F1<T1, T2>
+{
+    public F1(T2 p2) { }
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_TypeNameConflicts() 
+        {
+            var source = """
+public class A<_> 
+{
+    public void F() 
+    {
+        new D<_>(1); // Error: type _ is not predecesor of int + Warning: Conflicting name _
+    }
+}
+
+public class D<T> 
+{}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_ObjectInitializer() 
+        {
+            var source = """
+public class Program 
+{
+    public void M1() {
+        var t = new Bar<_,_,byte>(1) {prop1 = "", prop2 = 1}; // Bar<int, string, byte>
+    }
+}
+
+public class Bar<T1, T2, T3> 
+{
+    public T2 prop1 {get;set;}
+    public T3 prop3 {get;set;}
+
+    public Bar(T1 p1) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_ListInitializer() 
+        {
+            var source = """
+using System;
+using System.Collections;
+
+public class C {
+    public void M() {
+        new Foo<_, _, _, A>(1){1, new Bar<int, int>(), new Baz<int>(), new B()}; // Foo<int, int, int, A>
+    }
+}
+
+public class A {}
+public class B : A {}
+
+public class Bar<T1, T2> {}
+
+public class Baz<T1> : Bar<T1, string> {}
+
+public class Foo<T1, T2, T3, T4> : IEnumerable {
+    public IEnumerator GetEnumerator() => throw new NotImplementedException();
+
+    public Foo(int p1) {}
+    public Foo(int p1, string p2) {}
+    public Foo(string p1, float p2) {}
+
+    public void Add(T1 p1) {}
+    public void Add(Bar<T1,T2> p1) {}
+    public void Add(Bar<T3, string> p1) {}
+    public void Add(T4 p1) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void VariableTypeInference_Nested() 
+        {
+            var source = """
+public class Program
+{
+    public void M1() 
+    {
+        _[] temp = new int[1]; // int[]
+        G<_, string> = new G<int, _>(); // G<int, string>
+    }
+}
+
+public class G<T1, T2>
+{}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void CastingTypeInference_Nested() 
+        {
+            var source = """
+public class Program
+{
+    public void M1() 
+    {
+        var temp = new B<string, int>();
+        var dest1 = (A<_,_>)temp; // A<string, int>
+        var dest2 = (A<int, _>)(new B<_, string>()); // A<int, string>
+    }
+}
+
+public class B<T1, T2> 
+{
+    public static explicit operator A<T1, T2>(B<T1, T2> p1) 
+    {
+        throw new NotImplementedException(); 
+    }
+}
+public class A<T1, T2> {}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void TypeInference_Target() 
+        {
+            var source = """
+public class Program
+{
+    public void M1() 
+    {
+        G<int, _> temp = Foo<_,_>(""); //Foo<int, string>
+        temp = new G<_, string>(); // G<int, string>
+        G3<int,_,_,_,_> temp1 = (G3<_,int,_,_,_>)(new G3<_,_,_,int_,>(1){prop1 = 1}); // G3<int, int, int, int, int>
+    }
+
+
+    public G<T1, T2> Foo<T1, T2>(T1 obj) 
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class G<T1, T2> {}
+public class G3<T1, T2, T3, T4, T5> 
+{
+    public T5 prop1 {get;set;}
+    public G3(T4 p1) {}
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void TypeInference_Where() 
+        {
+            var source = """
+public class Program
+{
+    public void M1() 
+    {
+        var results = GetResult<C<_>>(1); //GetResult<C<int>>(int)
+    }
+
+TEnumerable GetResult<TEnumerable, TElement>(TElement element) where TEnumerable : G<TElement> 
+{
+    throw new NotImplementedException();
+}
+
+}
+
+public class G<T> {}
+public class C<T> : G<T> {}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        [Fact]
+        public void ReturnTypeInference_LocalDefinedFunction() 
+        {
+            var source = """
+public class Program 
+{
+    public void M()
+    {
+        var temp1 = F1(1); // typeof(temp1) == int 
+        var temp2 = F2(1); // Error: circular dependency
+
+        F1 (int a) => a + 1; 
+        
+        F2(int a) => F3(a); 
+        F3(int a) = F2(a);
+    }
+}
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+        }
+
+        #endregion
     }
 }
