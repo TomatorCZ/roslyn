@@ -398,6 +398,12 @@
       <summary>Creates an OmittedTypeArgumentSyntax node.</summary>
     </FactoryComment>
   </Node>
+  <Node Name="InferredTypeArgumentSyntax" Base="TypeSyntax">
+    <Kind Name="InferredType"/>
+    <Field Name="UnderscoreToken" Type="SyntaxToken">
+      <Kind Name="UnderscoreToken"/>
+    </Field>
+  </Node>
   <Node Name="RefTypeSyntax" Base="TypeSyntax">
     <TypeComment>
       <summary>The ref modifier of a method's return value or a local.</summary>

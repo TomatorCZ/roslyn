@@ -2082,6 +2082,89 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax
         }
     }
 
+    internal sealed partial class InferredTypeArgumentSyntax : TypeSyntax
+    {
+        internal readonly SyntaxToken underscoreToken;
+
+        internal InferredTypeArgumentSyntax(SyntaxKind kind, SyntaxToken underscoreToken, DiagnosticInfo[]? diagnostics, SyntaxAnnotation[]? annotations)
+          : base(kind, diagnostics, annotations)
+        {
+            this.SlotCount = 1;
+            this.AdjustFlagsAndWidth(underscoreToken);
+            this.underscoreToken = underscoreToken;
+        }
+
+        internal InferredTypeArgumentSyntax(SyntaxKind kind, SyntaxToken underscoreToken, SyntaxFactoryContext context)
+          : base(kind)
+        {
+            this.SetFactoryContext(context);
+            this.SlotCount = 1;
+            this.AdjustFlagsAndWidth(underscoreToken);
+            this.underscoreToken = underscoreToken;
+        }
+
+        internal InferredTypeArgumentSyntax(SyntaxKind kind, SyntaxToken underscoreToken)
+          : base(kind)
+        {
+            this.SlotCount = 1;
+            this.AdjustFlagsAndWidth(underscoreToken);
+            this.underscoreToken = underscoreToken;
+        }
+
+        public SyntaxToken UnderscoreToken => this.underscoreToken;
+
+        internal override GreenNode? GetSlot(int index)
+            => index == 0 ? this.underscoreToken : null;
+
+        internal override SyntaxNode CreateRed(SyntaxNode? parent, int position) => new CSharp.Syntax.InferredTypeArgumentSyntax(this, parent, position);
+
+        public override void Accept(CSharpSyntaxVisitor visitor) => visitor.VisitInferredTypeArgument(this);
+        public override TResult Accept<TResult>(CSharpSyntaxVisitor<TResult> visitor) => visitor.VisitInferredTypeArgument(this);
+
+        public InferredTypeArgumentSyntax Update(SyntaxToken underscoreToken)
+        {
+            if (underscoreToken != this.UnderscoreToken)
+            {
+                var newNode = SyntaxFactory.InferredTypeArgument(underscoreToken);
+                var diags = GetDiagnostics();
+                if (diags?.Length > 0)
+                    newNode = newNode.WithDiagnosticsGreen(diags);
+                var annotations = GetAnnotations();
+                if (annotations?.Length > 0)
+                    newNode = newNode.WithAnnotationsGreen(annotations);
+                return newNode;
+            }
+
+            return this;
+        }
+
+        internal override GreenNode SetDiagnostics(DiagnosticInfo[]? diagnostics)
+            => new InferredTypeArgumentSyntax(this.Kind, this.underscoreToken, diagnostics, GetAnnotations());
+
+        internal override GreenNode SetAnnotations(SyntaxAnnotation[]? annotations)
+            => new InferredTypeArgumentSyntax(this.Kind, this.underscoreToken, GetDiagnostics(), annotations);
+
+        internal InferredTypeArgumentSyntax(ObjectReader reader)
+          : base(reader)
+        {
+            this.SlotCount = 1;
+            var underscoreToken = (SyntaxToken)reader.ReadValue();
+            AdjustFlagsAndWidth(underscoreToken);
+            this.underscoreToken = underscoreToken;
+        }
+
+        internal override void WriteTo(ObjectWriter writer)
+        {
+            base.WriteTo(writer);
+            writer.WriteValue(this.underscoreToken);
+        }
+
+        static InferredTypeArgumentSyntax()
+        {
+            ObjectBinder.RegisterTypeReader(typeof(InferredTypeArgumentSyntax), r => new InferredTypeArgumentSyntax(r));
+        }
+    }
+
     /// <summary>The ref modifier of a method's return value or a local.</summary>
     internal sealed partial class RefTypeSyntax : TypeSyntax
     {
@@ -34564,6 +34647,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax
         public virtual TResult VisitTupleType(TupleTypeSyntax node) => this.DefaultVisit(node);
         public virtual TResult VisitTupleElement(TupleElementSyntax node) => this.DefaultVisit(node);
         public virtual TResult VisitOmittedTypeArgument(OmittedTypeArgumentSyntax node) => this.DefaultVisit(node);
+        public virtual TResult VisitInferredTypeArgument(InferredTypeArgumentSyntax node) => this.DefaultVisit(node);
         public virtual TResult VisitRefType(RefTypeSyntax node) => this.DefaultVisit(node);
         public virtual TResult VisitScopedType(ScopedTypeSyntax node) => this.DefaultVisit(node);
         public virtual TResult VisitParenthesizedExpression(ParenthesizedExpressionSyntax node) => this.DefaultVisit(node);
@@ -34806,6 +34890,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax
         public virtual void VisitTupleType(TupleTypeSyntax node) => this.DefaultVisit(node);
         public virtual void VisitTupleElement(TupleElementSyntax node) => this.DefaultVisit(node);
         public virtual void VisitOmittedTypeArgument(OmittedTypeArgumentSyntax node) => this.DefaultVisit(node);
+        public virtual void VisitInferredTypeArgument(InferredTypeArgumentSyntax node) => this.DefaultVisit(node);
         public virtual void VisitRefType(RefTypeSyntax node) => this.DefaultVisit(node);
         public virtual void VisitScopedType(ScopedTypeSyntax node) => this.DefaultVisit(node);
         public virtual void VisitParenthesizedExpression(ParenthesizedExpressionSyntax node) => this.DefaultVisit(node);
@@ -35083,6 +35168,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax
 
         public override CSharpSyntaxNode VisitOmittedTypeArgument(OmittedTypeArgumentSyntax node)
             => node.Update((SyntaxToken)Visit(node.OmittedTypeArgumentToken));
+
+        public override CSharpSyntaxNode VisitInferredTypeArgument(InferredTypeArgumentSyntax node)
+            => node.Update((SyntaxToken)Visit(node.UnderscoreToken));
 
         public override CSharpSyntaxNode VisitRefType(RefTypeSyntax node)
             => node.Update((SyntaxToken)Visit(node.RefKeyword), (SyntaxToken)Visit(node.ReadOnlyKeyword), (TypeSyntax)Visit(node.Type));
@@ -36151,6 +36239,26 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax
             if (cached != null) return (OmittedTypeArgumentSyntax)cached;
 
             var result = new OmittedTypeArgumentSyntax(SyntaxKind.OmittedTypeArgument, omittedTypeArgumentToken, this.context);
+            if (hash >= 0)
+            {
+                SyntaxNodeCache.AddNode(result, hash);
+            }
+
+            return result;
+        }
+
+        public InferredTypeArgumentSyntax InferredTypeArgument(SyntaxToken underscoreToken)
+        {
+#if DEBUG
+            if (underscoreToken == null) throw new ArgumentNullException(nameof(underscoreToken));
+            if (underscoreToken.Kind != SyntaxKind.UnderscoreToken) throw new ArgumentException(nameof(underscoreToken));
+#endif
+
+            int hash;
+            var cached = CSharpSyntaxNodeCache.TryGetNode((int)SyntaxKind.InferredType, underscoreToken, this.context, out hash);
+            if (cached != null) return (InferredTypeArgumentSyntax)cached;
+
+            var result = new InferredTypeArgumentSyntax(SyntaxKind.InferredType, underscoreToken, this.context);
             if (hash >= 0)
             {
                 SyntaxNodeCache.AddNode(result, hash);
@@ -41296,6 +41404,26 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax.InternalSyntax
             if (cached != null) return (OmittedTypeArgumentSyntax)cached;
 
             var result = new OmittedTypeArgumentSyntax(SyntaxKind.OmittedTypeArgument, omittedTypeArgumentToken);
+            if (hash >= 0)
+            {
+                SyntaxNodeCache.AddNode(result, hash);
+            }
+
+            return result;
+        }
+
+        public static InferredTypeArgumentSyntax InferredTypeArgument(SyntaxToken underscoreToken)
+        {
+#if DEBUG
+            if (underscoreToken == null) throw new ArgumentNullException(nameof(underscoreToken));
+            if (underscoreToken.Kind != SyntaxKind.UnderscoreToken) throw new ArgumentException(nameof(underscoreToken));
+#endif
+
+            int hash;
+            var cached = SyntaxNodeCache.TryGetNode((int)SyntaxKind.InferredType, underscoreToken, out hash);
+            if (cached != null) return (InferredTypeArgumentSyntax)cached;
+
+            var result = new InferredTypeArgumentSyntax(SyntaxKind.InferredType, underscoreToken);
             if (hash >= 0)
             {
                 SyntaxNodeCache.AddNode(result, hash);

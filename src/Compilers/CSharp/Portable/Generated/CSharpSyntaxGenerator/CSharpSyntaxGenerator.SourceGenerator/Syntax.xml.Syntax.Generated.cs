@@ -982,6 +982,44 @@ namespace Microsoft.CodeAnalysis.CSharp.Syntax
         public OmittedTypeArgumentSyntax WithOmittedTypeArgumentToken(SyntaxToken omittedTypeArgumentToken) => Update(omittedTypeArgumentToken);
     }
 
+    /// <remarks>
+    /// <para>This node is associated with the following syntax kinds:</para>
+    /// <list type="bullet">
+    /// <item><description><see cref="SyntaxKind.InferredType"/></description></item>
+    /// </list>
+    /// </remarks>
+    public sealed partial class InferredTypeArgumentSyntax : TypeSyntax
+    {
+
+        internal InferredTypeArgumentSyntax(InternalSyntax.CSharpSyntaxNode green, SyntaxNode? parent, int position)
+          : base(green, parent, position)
+        {
+        }
+
+        public SyntaxToken UnderscoreToken => new SyntaxToken(this, ((Syntax.InternalSyntax.InferredTypeArgumentSyntax)this.Green).underscoreToken, Position, 0);
+
+        internal override SyntaxNode? GetNodeSlot(int index) => null;
+
+        internal override SyntaxNode? GetCachedSlot(int index) => null;
+
+        public override void Accept(CSharpSyntaxVisitor visitor) => visitor.VisitInferredTypeArgument(this);
+        public override TResult? Accept<TResult>(CSharpSyntaxVisitor<TResult> visitor) where TResult : default => visitor.VisitInferredTypeArgument(this);
+
+        public InferredTypeArgumentSyntax Update(SyntaxToken underscoreToken)
+        {
+            if (underscoreToken != this.UnderscoreToken)
+            {
+                var newNode = SyntaxFactory.InferredTypeArgument(underscoreToken);
+                var annotations = GetAnnotations();
+                return annotations?.Length > 0 ? newNode.WithAnnotations(annotations) : newNode;
+            }
+
+            return this;
+        }
+
+        public InferredTypeArgumentSyntax WithUnderscoreToken(SyntaxToken underscoreToken) => Update(underscoreToken);
+    }
+
     /// <summary>The ref modifier of a method's return value or a local.</summary>
     /// <remarks>
     /// <para>This node is associated with the following syntax kinds:</para>

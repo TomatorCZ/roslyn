@@ -69,6 +69,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// <summary>Called when the visitor visits a OmittedTypeArgumentSyntax node.</summary>
         public virtual TResult? VisitOmittedTypeArgument(OmittedTypeArgumentSyntax node) => this.DefaultVisit(node);
 
+        /// <summary>Called when the visitor visits a InferredTypeArgumentSyntax node.</summary>
+        public virtual TResult? VisitInferredTypeArgument(InferredTypeArgumentSyntax node) => this.DefaultVisit(node);
+
         /// <summary>Called when the visitor visits a RefTypeSyntax node.</summary>
         public virtual TResult? VisitRefType(RefTypeSyntax node) => this.DefaultVisit(node);
 
@@ -786,6 +789,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// <summary>Called when the visitor visits a OmittedTypeArgumentSyntax node.</summary>
         public virtual void VisitOmittedTypeArgument(OmittedTypeArgumentSyntax node) => this.DefaultVisit(node);
 
+        /// <summary>Called when the visitor visits a InferredTypeArgumentSyntax node.</summary>
+        public virtual void VisitInferredTypeArgument(InferredTypeArgumentSyntax node) => this.DefaultVisit(node);
+
         /// <summary>Called when the visitor visits a RefTypeSyntax node.</summary>
         public virtual void VisitRefType(RefTypeSyntax node) => this.DefaultVisit(node);
 
@@ -1502,6 +1508,9 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override SyntaxNode? VisitOmittedTypeArgument(OmittedTypeArgumentSyntax node)
             => node.Update(VisitToken(node.OmittedTypeArgumentToken));
+
+        public override SyntaxNode? VisitInferredTypeArgument(InferredTypeArgumentSyntax node)
+            => node.Update(VisitToken(node.UnderscoreToken));
 
         public override SyntaxNode? VisitRefType(RefTypeSyntax node)
             => node.Update(VisitToken(node.RefKeyword), VisitToken(node.ReadOnlyKeyword), (TypeSyntax?)Visit(node.Type) ?? throw new ArgumentNullException("type"));
@@ -2413,6 +2422,17 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// <summary>Creates a new OmittedTypeArgumentSyntax instance.</summary>
         public static OmittedTypeArgumentSyntax OmittedTypeArgument()
             => SyntaxFactory.OmittedTypeArgument(SyntaxFactory.Token(SyntaxKind.OmittedTypeArgumentToken));
+
+        /// <summary>Creates a new InferredTypeArgumentSyntax instance.</summary>
+        public static InferredTypeArgumentSyntax InferredTypeArgument(SyntaxToken underscoreToken)
+        {
+            if (underscoreToken.Kind() != SyntaxKind.UnderscoreToken) throw new ArgumentException(nameof(underscoreToken));
+            return (InferredTypeArgumentSyntax)Syntax.InternalSyntax.SyntaxFactory.InferredTypeArgument((Syntax.InternalSyntax.SyntaxToken)underscoreToken.Node!).CreateRed();
+        }
+
+        /// <summary>Creates a new InferredTypeArgumentSyntax instance.</summary>
+        public static InferredTypeArgumentSyntax InferredTypeArgument()
+            => SyntaxFactory.InferredTypeArgument(SyntaxFactory.Token(SyntaxKind.UnderscoreToken));
 
         /// <summary>Creates a new RefTypeSyntax instance.</summary>
         public static RefTypeSyntax RefType(SyntaxToken refKeyword, SyntaxToken readOnlyKeyword, TypeSyntax type)

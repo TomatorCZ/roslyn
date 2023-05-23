@@ -909,5 +909,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         InterpolatedRawStringEndToken = 9074,               // """ (preceding whitespace and newline are included in the Text for this token)
 
         ScopedType = 9075,
+
+        InferredType = 9076,
     }
 }

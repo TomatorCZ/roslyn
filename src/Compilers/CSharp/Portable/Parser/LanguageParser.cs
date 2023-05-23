@@ -9475,7 +9475,7 @@ done:;
                     awaitKeyword,
                     usingKeyword,
                     mods.ToList(),
-                    _syntaxFactory.VariableDeclaration(type, _pool.ToListAndFree(variables)),
+                    _syntaxFactory.VariableDeclaration(Replace(type), _pool.ToListAndFree(variables)),
                     this.EatToken(SyntaxKind.SemicolonToken));
             }
             finally
@@ -10609,7 +10609,7 @@ done:;
                 ? EatContextualToken(SyntaxKind.ScopedKeyword)
                 : null;
 
-            var type = this.ParseType(mode);
+            var type = Replace(this.ParseType(mode));
             return _syntaxFactory.DeclarationExpression(
                 scopedKeyword == null ? type : _syntaxFactory.ScopedType(scopedKeyword, type),
                 ParseDesignation(forPattern: false));
@@ -10873,16 +10873,97 @@ done:;
                 this.PeekToken(tokenIndex + 1).Kind != SyntaxKind.AsteriskToken;
         }
 
+
+        SeparatedSyntaxList<T> Transform<T>(SeparatedSyntaxList<T> list, Func<T, T> transformer)
+            where T : GreenNode
+        {
+            var transformed = _pool.AllocateSeparated<T>();
+            foreach (var item in list.GetWithSeparators())
+            {
+                if (item is T { } stx)
+                {
+                    transformed.Add(transformer(stx));
+                }
+                else
+                {
+                    transformed.AddSeparator(item);
+                }
+            }
+            var res = transformed.ToList();
+            _pool.Free(transformed);
+            return res;
+        }
+
+        private TypeSyntax Replace(TypeSyntax stx)
+        {
+            TypeSyntax result;
+
+            switch (stx)
+            {
+                case GenericNameSyntax { TypeArgumentList: { } list } val:
+                    result = val.Update(val.Identifier, list.Update(list.LessThanToken, Transform(list.Arguments, Replace), list.GreaterThanToken));
+                    break;
+                case IdentifierNameSyntax { Identifier: { ContextualKind: SyntaxKind.UnderscoreToken } underscoreTok }:
+                    result = _syntaxFactory.InferredTypeArgument(Convert(SyntaxKind.UnderscoreToken, underscoreTok));
+                    break;
+                case ArrayTypeSyntax { } val:
+                    result = val.Update(Replace(val.ElementType), val.RankSpecifiers);
+                    break;
+                case QualifiedNameSyntax { } val:
+                    result = val.Update(val.Left, val.DotToken, (SimpleNameSyntax)Replace(val.Right));
+                    break;
+                default:
+                    result = stx;
+                    break;
+            }
+
+            return result;
+
+            SyntaxToken Convert(SyntaxKind kind, SyntaxToken token)
+            {
+                var kw = token.IsMissing
+                    ? SyntaxFactory.MissingToken(token.LeadingTrivia.Node, token.ContextualKind, token.TrailingTrivia.Node)
+                    : SyntaxFactory.Token(token.LeadingTrivia.Node, token.ContextualKind, token.TrailingTrivia.Node);
+                var d = token.GetDiagnostics();
+                if (d != null && d.Length > 0)
+                {
+                    kw = kw.WithDiagnosticsGreen(d);
+                }
+
+                return kw;
+            }
+        }
+
+        private ExpressionSyntax ReplaceInvoke(ExpressionSyntax stx) 
+        {
+            ExpressionSyntax result;
+
+            switch (stx)
+            {
+                case MemberAccessExpressionSyntax { } val:
+                    result = val.Update(val.Expression, val.OperatorToken, (SimpleNameSyntax)Replace(val.Name));
+                    break;
+                case GenericNameSyntax { } val:
+                    result = Replace(val);
+                    break;
+                default:
+                    result = stx;
+                    break;
+            }
+
+            return result;
+        }
+
         private ExpressionSyntax ParsePostFixExpression(ExpressionSyntax expr)
         {
             Debug.Assert(expr != null);
-
+            
             while (true)
             {
                 switch (this.CurrentToken.Kind)
                 {
                     case SyntaxKind.OpenParenToken:
-                        expr = _syntaxFactory.InvocationExpression(expr, this.ParseParenthesizedArgumentList());
+                        expr = _syntaxFactory.InvocationExpression(ReplaceInvoke(expr), this.ParseParenthesizedArgumentList());
                         continue;
 
                     case SyntaxKind.OpenBracketToken:
@@ -10988,7 +11069,7 @@ done:;
                 switch (this.CurrentToken.Kind)
                 {
                     case SyntaxKind.OpenParenToken:
-                        expr = _syntaxFactory.InvocationExpression(expr, this.ParseParenthesizedArgumentList());
+                        expr = _syntaxFactory.InvocationExpression(ReplaceInvoke(expr), this.ParseParenthesizedArgumentList());
                         continue;
 
                     case SyntaxKind.OpenBracketToken:
@@ -11478,7 +11559,7 @@ done:;
                     resetPoint.Reset();
                     return _syntaxFactory.CastExpression(
                         this.EatToken(SyntaxKind.OpenParenToken),
-                        this.ParseType(),
+                        Replace(this.ParseType()),
                         this.EatToken(SyntaxKind.CloseParenToken),
                         this.ParseSubExpression(Precedence.Cast));
                 }
@@ -11934,7 +12015,7 @@ done:;
 
             if (!IsImplicitObjectCreation())
             {
-                type = this.ParseType(ParseTypeMode.NewExpression);
+                type = Replace(this.ParseType(ParseTypeMode.NewExpression));
                 if (type.Kind == SyntaxKind.ArrayType)
                 {
                     // Check for an initializer.

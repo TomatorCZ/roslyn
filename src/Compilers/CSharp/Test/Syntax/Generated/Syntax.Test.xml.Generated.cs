@@ -64,6 +64,9 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
         private static Syntax.InternalSyntax.OmittedTypeArgumentSyntax GenerateOmittedTypeArgument()
             => InternalSyntaxFactory.OmittedTypeArgument(InternalSyntaxFactory.Token(SyntaxKind.OmittedTypeArgumentToken));
 
+        private static Syntax.InternalSyntax.InferredTypeArgumentSyntax GenerateInferredTypeArgument()
+            => InternalSyntaxFactory.InferredTypeArgument(InternalSyntaxFactory.Token(SyntaxKind.UnderscoreToken));
+
         private static Syntax.InternalSyntax.RefTypeSyntax GenerateRefType()
             => InternalSyntaxFactory.RefType(InternalSyntaxFactory.Token(SyntaxKind.RefKeyword), null, GenerateIdentifierName());
 
@@ -925,6 +928,16 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
             var node = GenerateOmittedTypeArgument();
 
             Assert.Equal(SyntaxKind.OmittedTypeArgumentToken, node.OmittedTypeArgumentToken.Kind);
+
+            AttachAndCheckDiagnostics(node);
+        }
+
+        [Fact]
+        public void TestInferredTypeArgumentFactoryAndProperties()
+        {
+            var node = GenerateInferredTypeArgument();
+
+            Assert.Equal(SyntaxKind.UnderscoreToken, node.UnderscoreToken.Kind);
 
             AttachAndCheckDiagnostics(node);
         }
@@ -4255,6 +4268,32 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
         public void TestOmittedTypeArgumentIdentityRewriter()
         {
             var oldNode = GenerateOmittedTypeArgument();
+            var rewriter = new IdentityRewriter();
+            var newNode = rewriter.Visit(oldNode);
+
+            Assert.Same(oldNode, newNode);
+        }
+
+        [Fact]
+        public void TestInferredTypeArgumentTokenDeleteRewriter()
+        {
+            var oldNode = GenerateInferredTypeArgument();
+            var rewriter = new TokenDeleteRewriter();
+            var newNode = rewriter.Visit(oldNode);
+
+            if(!oldNode.IsMissing)
+            {
+                Assert.NotEqual(oldNode, newNode);
+            }
+
+            Assert.NotNull(newNode);
+            Assert.True(newNode.IsMissing, "No tokens => missing");
+        }
+
+        [Fact]
+        public void TestInferredTypeArgumentIdentityRewriter()
+        {
+            var oldNode = GenerateInferredTypeArgument();
             var rewriter = new IdentityRewriter();
             var newNode = rewriter.Visit(oldNode);
 
@@ -10040,6 +10079,9 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
         private static OmittedTypeArgumentSyntax GenerateOmittedTypeArgument()
             => SyntaxFactory.OmittedTypeArgument(SyntaxFactory.Token(SyntaxKind.OmittedTypeArgumentToken));
 
+        private static InferredTypeArgumentSyntax GenerateInferredTypeArgument()
+            => SyntaxFactory.InferredTypeArgument(SyntaxFactory.Token(SyntaxKind.UnderscoreToken));
+
         private static RefTypeSyntax GenerateRefType()
             => SyntaxFactory.RefType(SyntaxFactory.Token(SyntaxKind.RefKeyword), default(SyntaxToken), GenerateIdentifierName());
 
@@ -10902,6 +10944,16 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
 
             Assert.Equal(SyntaxKind.OmittedTypeArgumentToken, node.OmittedTypeArgumentToken.Kind());
             var newNode = node.WithOmittedTypeArgumentToken(node.OmittedTypeArgumentToken);
+            Assert.Equal(node, newNode);
+        }
+
+        [Fact]
+        public void TestInferredTypeArgumentFactoryAndProperties()
+        {
+            var node = GenerateInferredTypeArgument();
+
+            Assert.Equal(SyntaxKind.UnderscoreToken, node.UnderscoreToken.Kind());
+            var newNode = node.WithUnderscoreToken(node.UnderscoreToken);
             Assert.Equal(node, newNode);
         }
 
@@ -14231,6 +14283,32 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
         public void TestOmittedTypeArgumentIdentityRewriter()
         {
             var oldNode = GenerateOmittedTypeArgument();
+            var rewriter = new IdentityRewriter();
+            var newNode = rewriter.Visit(oldNode);
+
+            Assert.Same(oldNode, newNode);
+        }
+
+        [Fact]
+        public void TestInferredTypeArgumentTokenDeleteRewriter()
+        {
+            var oldNode = GenerateInferredTypeArgument();
+            var rewriter = new TokenDeleteRewriter();
+            var newNode = rewriter.Visit(oldNode);
+
+            if(!oldNode.IsMissing)
+            {
+                Assert.NotEqual(oldNode, newNode);
+            }
+
+            Assert.NotNull(newNode);
+            Assert.True(newNode.IsMissing, "No tokens => missing");
+        }
+
+        [Fact]
+        public void TestInferredTypeArgumentIdentityRewriter()
+        {
+            var oldNode = GenerateInferredTypeArgument();
             var rewriter = new IdentityRewriter();
             var newNode = rewriter.Visit(oldNode);
 
