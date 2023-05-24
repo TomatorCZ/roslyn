@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using Microsoft.Cci;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.PooledObjects;
@@ -3411,6 +3412,17 @@ outerDefault:
                 result;
         }
 
+        private bool IsInferredType(TypeWithAnnotations type) 
+        {
+            if (type.Type.Kind == SymbolKind.InferredType)
+                return true;
+
+            if (type.Type is NamedTypeSymbol { } symbol) 
+                return symbol.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType);
+             
+            return false;
+        }
+
         private MemberResolutionResult<TMember> IsApplicable<TMember>(
             TMember member,                // method or property
             TMember leastOverriddenMember, // method or property 
@@ -3450,7 +3462,7 @@ outerDefault:
                     MethodSymbol leastOverriddenMethod = (MethodSymbol)(Symbol)leastOverriddenMember;
 
                     ImmutableArray<TypeWithAnnotations> typeArguments;
-                    if (typeArgumentsBuilder.Count > 0)
+                    if (typeArgumentsBuilder.Count > 0 && !typeArgumentsBuilder.Any(IsInferredType))
                     {
                         // generic type arguments explicitly specified at call-site:
                         typeArguments = typeArgumentsBuilder.ToImmutable();
