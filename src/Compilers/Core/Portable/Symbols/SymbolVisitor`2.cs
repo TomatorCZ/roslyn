@@ -117,5 +117,10 @@ namespace Microsoft.CodeAnalysis
         {
             return DefaultVisit(symbol, argument);
         }
+
+        public virtual TResult VisitInferredType(IInferredTypeSymbol symbol, TArgument argument)
+        {
+            return DefaultVisit(symbol, argument);
+        }
     }
 }

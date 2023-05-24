@@ -11,7 +11,10 @@ Microsoft.CodeAnalysis.Diagnostics.CompilationWithAnalyzers.GetAnalyzerSyntaxDia
 Microsoft.CodeAnalysis.Diagnostics.CompilationWithAnalyzers.GetAnalyzerSyntaxDiagnosticsAsync(Microsoft.CodeAnalysis.SyntaxTree! tree, Microsoft.CodeAnalysis.Text.TextSpan? filterSpan, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.Diagnostic!>>!
 Microsoft.CodeAnalysis.Diagnostics.SemanticModelAnalysisContext.FilterSpan.get -> Microsoft.CodeAnalysis.Text.TextSpan?
 Microsoft.CodeAnalysis.Diagnostics.SyntaxTreeAnalysisContext.FilterSpan.get -> Microsoft.CodeAnalysis.Text.TextSpan?
+Microsoft.CodeAnalysis.IInferredTypeSymbol
 static Microsoft.CodeAnalysis.SeparatedSyntaxList<TNode>.explicit operator Microsoft.CodeAnalysis.SeparatedSyntaxList<TNode!>(Microsoft.CodeAnalysis.SeparatedSyntaxList<Microsoft.CodeAnalysis.SyntaxNode!> nodes) -> Microsoft.CodeAnalysis.SeparatedSyntaxList<TNode!>
 static Microsoft.CodeAnalysis.SeparatedSyntaxList<TNode>.op_Implicit(Microsoft.CodeAnalysis.SeparatedSyntaxList<Microsoft.CodeAnalysis.SyntaxNode!> nodes) -> Microsoft.CodeAnalysis.SeparatedSyntaxList<TNode!>
 static Microsoft.CodeAnalysis.SyntaxList<TNode>.explicit operator Microsoft.CodeAnalysis.SyntaxList<TNode!>(Microsoft.CodeAnalysis.SyntaxList<Microsoft.CodeAnalysis.SyntaxNode!> nodes) -> Microsoft.CodeAnalysis.SyntaxList<TNode!>
 static Microsoft.CodeAnalysis.SyntaxList<TNode>.op_Implicit(Microsoft.CodeAnalysis.SyntaxList<Microsoft.CodeAnalysis.SyntaxNode!> nodes) -> Microsoft.CodeAnalysis.SyntaxList<TNode!>
+virtual Microsoft.CodeAnalysis.SymbolVisitor.VisitInferredType(Microsoft.CodeAnalysis.IInferredTypeSymbol! symbol) -> void
+virtual Microsoft.CodeAnalysis.SymbolVisitor<TResult>.VisitInferredType(Microsoft.CodeAnalysis.IInferredTypeSymbol! symbol) -> TResult?

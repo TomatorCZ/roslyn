@@ -185,6 +185,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return true;
 
                 case SymbolKind.TypeParameter:
+                case SymbolKind.InferredType:
                 case SymbolKind.Parameter:
                 case SymbolKind.Local:
                 case SymbolKind.Label:
@@ -210,7 +211,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     }
 
                     return IsMemberAccessible(symbol.ContainingType, symbol.DeclaredAccessibility, within, throughTypeOpt, out failedThroughTypeCheck, compilation, ref useSiteInfo);
-
+                
                 default:
                     throw ExceptionUtilities.UnexpectedValue(symbol.Kind);
             }

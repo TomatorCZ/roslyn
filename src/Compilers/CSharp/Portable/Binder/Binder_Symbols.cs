@@ -509,7 +509,11 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                         return BindNamespaceOrTypeOrAliasSymbol(scopedTypeSyntax.Type, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics);
                     }
-
+                case SyntaxKind.InferredType:
+                    {
+                        var inferredType = (InferredTypeArgumentSyntax)syntax;
+                        return TypeWithAnnotations.Create(new SourceUnboundTypeArgumentSymbol(new SyntaxReference[] { inferredType.GetReference() }.ToImmutableArray<SyntaxReference>(),new Location[] { inferredType.Location }.ToImmutableArray<Location>()));
+                    }
                 default:
                     {
                         // This is invalid syntax for a type.  This arises when a constant pattern that fails to bind

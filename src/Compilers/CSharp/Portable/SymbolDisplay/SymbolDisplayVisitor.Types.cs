@@ -170,6 +170,13 @@ namespace Microsoft.CodeAnalysis.CSharp
             AddNullableAnnotations(symbol);
         }
 
+        public override void VisitInferredType(IInferredTypeSymbol symbol)
+        {
+            builder.Add(CreatePart(SymbolDisplayPartKind.InferredType, symbol, "_"));
+
+            AddNullableAnnotations(symbol);
+        }
+
         public override void VisitDynamicType(IDynamicTypeSymbol symbol)
         {
             builder.Add(CreatePart(SymbolDisplayPartKind.Keyword, symbol, symbol.Name));
