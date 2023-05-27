@@ -116,6 +116,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     break;
                 case SymbolKind.ErrorType:
                     return ((ErrorTypeSymbol)previous).Substitute(this);
+                case SymbolKind.InferredType:
+                    return SubstituteInferredTypeArgument((SourceUnboundTypeArgumentSymbol)previous);
                 default:
                     result = previous;
                     break;
@@ -178,6 +180,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         protected virtual TypeWithAnnotations SubstituteTypeParameter(TypeParameterSymbol typeParameter)
         {
             return TypeWithAnnotations.Create(typeParameter);
+        }
+
+        protected virtual TypeWithAnnotations SubstituteInferredTypeArgument(SourceUnboundTypeArgumentSymbol typeArgument) 
+        {
+            return TypeWithAnnotations.Create(typeArgument);
         }
 
         private ArrayTypeSymbol SubstituteArrayType(ArrayTypeSymbol t)

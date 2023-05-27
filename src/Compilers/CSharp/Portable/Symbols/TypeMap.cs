@@ -53,6 +53,20 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             // mapping contents are read-only hereafter
         }
 
+        internal TypeMap(TypeMap map, ImmutableArray<TypeParameterSymbol> from, ImmutableArray<TypeWithAnnotations> to) 
+            : this((map == null) ? s_emptyDictionary : map.Mapping)
+        {
+            for (int i = 0; i < from.Length; i++)
+            {
+                TypeParameterSymbol tp = from[i];
+                TypeWithAnnotations ta = to[i];
+                if (!ta.Is(tp))
+                {
+                    Mapping.Add(tp, ta);
+                }
+            }
+        }
+
         private TypeMap(SmallDictionary<TypeParameterSymbol, TypeWithAnnotations> mapping)
             : base(new SmallDictionary<TypeParameterSymbol, TypeWithAnnotations>(mapping, ReferenceEqualityComparer.Instance))
         {

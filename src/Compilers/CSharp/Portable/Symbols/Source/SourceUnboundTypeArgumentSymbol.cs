@@ -11,11 +11,12 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Symbols.PublicModel;
 using Microsoft.CodeAnalysis.PooledObjects;
+using Microsoft.CodeAnalysis.Symbols;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
 {
-    internal class SourceUnboundTypeArgumentSymbol : TypeSymbol
+    internal class SourceUnboundTypeArgumentSymbol : TypeSymbol, ITypeVariableInternal
     {
         private readonly ImmutableArray<SyntaxReference> _syntaxRefs;
         private readonly ImmutableArray<Location> _locations;

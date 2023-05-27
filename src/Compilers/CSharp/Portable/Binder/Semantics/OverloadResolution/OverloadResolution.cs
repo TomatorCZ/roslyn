@@ -3477,7 +3477,8 @@ outerDefault:
                                             originalEffectiveParameters,
                                             out hasTypeArgumentsInferredFromFunctionType,
                                             out inferenceError,
-                                            ref useSiteInfo);
+                                            ref useSiteInfo,
+                                            typeArgumentsBuilder);
                         if (typeArguments.IsDefault)
                         {
                             return new MemberResolutionResult<TMember>(member, leastOverriddenMember, inferenceError, hasTypeArgumentInferredFromFunctionType: false);
@@ -3564,7 +3565,8 @@ outerDefault:
             EffectiveParameters originalEffectiveParameters,
             out bool hasTypeArgumentsInferredFromFunctionType,
             out MemberAnalysisResult error,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            ArrayBuilder<TypeWithAnnotations> typeArguments)
         {
             var args = arguments.Arguments.ToImmutable();
 
@@ -3572,22 +3574,33 @@ outerDefault:
             // from the original definition, not the method as it exists as a member of 
             // a possibly constructed generic type, is exceedingly subtle. See the comments
             // in "Infer" for details.
-
-            var inferenceResult = MethodTypeInferrer.Infer(
+            var inferenceResult = TypeInferrer.Infer(
                 _binder,
                 _binder.Conversions,
-                originalTypeParameters,
-                method.ContainingType,
-                originalEffectiveParameters.ParameterTypes,
-                originalEffectiveParameters.ParameterRefKinds,
-                args,
-                ref useSiteInfo);
+                TypeInferrer.MakeTypeVariables(originalTypeParameters, typeArguments),
+                TypeInferrer.MakeConstraints(
+                    originalEffectiveParameters.ParameterTypes,
+                    originalEffectiveParameters.ParameterRefKinds,
+                    args),
+                method.ContainingType.TypeSubstitution,
+                ref useSiteInfo
+                );
+
+            //var inferenceResult = MethodTypeInferrer.Infer(
+                //_binder,
+                //_binder.Conversions,
+                //originalTypeParameters,
+                //method.ContainingType,
+                //originalEffectiveParameters.ParameterTypes,
+                //originalEffectiveParameters.ParameterRefKinds,
+                //args,
+                //ref useSiteInfo);
 
             if (inferenceResult.Success)
             {
-                hasTypeArgumentsInferredFromFunctionType = inferenceResult.HasTypeArgumentInferredFromFunctionType;
+                hasTypeArgumentsInferredFromFunctionType = inferenceResult.HasTypeVariableInferredFromFunctionType;
                 error = default(MemberAnalysisResult);
-                return inferenceResult.InferredTypeArguments;
+                return TypeInferrer.GetInferredTypeParameters(method.ContainingType, originalTypeParameters, inferenceResult);
             }
 
             if (arguments.IsExtensionMethodInvocation)

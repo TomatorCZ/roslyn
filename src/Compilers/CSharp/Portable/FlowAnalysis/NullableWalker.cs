@@ -7130,26 +7130,39 @@ namespace Microsoft.CodeAnalysis.CSharp
             refKinds.Free();
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
-            var result = MethodTypeInferrer.Infer(
+            var result = TypeInferrer.Infer(
                 _binder,
                 _conversions,
-                definition.TypeParameters,
-                definition.ContainingType,
-                parameterTypes,
-                parameterRefKinds,
-                arguments,
+                TypeInferrer.MakeTypeVariables(definition.TypeParameters, ArrayBuilder<TypeWithAnnotations>.GetInstance()),
+                TypeInferrer.MakeConstraints(
+                    parameterTypes,
+                    parameterRefKinds,
+                    arguments),
+                definition.ContainingType.TypeSubstitution,
                 ref discardedUseSiteInfo,
-                new MethodInferenceExtensions(this));
+                new MethodInferenceExtensions(this)
+                );
+
+            //var result = MethodTypeInferrer.Infer(
+            //    _binder,
+            //    _conversions,
+            //    definition.TypeParameters,
+            //    definition.ContainingType,
+            //    parameterTypes,
+            //    parameterRefKinds,
+            //    arguments,
+            //    ref discardedUseSiteInfo,
+            //    new MethodInferenceExtensions(this));
 
             if (!result.Success)
             {
                 return method;
             }
 
-            return definition.Construct(result.InferredTypeArguments);
+            return definition.Construct(TypeInferrer.GetInferredTypeParameters(definition.ContainingType, definition.TypeParameters, result));
         }
 
-        private sealed class MethodInferenceExtensions : MethodTypeInferrer.Extensions
+        private sealed class MethodInferenceExtensions : TypeInferrer.Extensions
         {
             private readonly NullableWalker _walker;
 
