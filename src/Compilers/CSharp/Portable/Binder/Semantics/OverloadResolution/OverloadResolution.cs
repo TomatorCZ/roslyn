@@ -3581,7 +3581,9 @@ outerDefault:
                 TypeInferrer.MakeConstraints(
                     originalEffectiveParameters.ParameterTypes,
                     originalEffectiveParameters.ParameterRefKinds,
-                    args),
+                    args,
+                    originalTypeParameters,
+                    typeArguments.SelectAsArray(x => (BoundExpression)new BoundTypeExpression(x.Type.GetNonNullSyntaxNode(),null, x.Type))),
                 method.ContainingType.TypeSubstitution,
                 ref useSiteInfo
                 );

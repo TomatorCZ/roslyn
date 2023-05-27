@@ -2334,7 +2334,9 @@ OuterBreak:
         public static ImmutableArray<Constraint> MakeConstraints(
             ImmutableArray<TypeWithAnnotations> formalParameterTypes,
             ImmutableArray<RefKind> formalParameterRefKinds,
-            ImmutableArray<BoundExpression> arguments) 
+            ImmutableArray<BoundExpression> arguments,
+            ImmutableArray<TypeParameterSymbol> typeParameters,
+            ImmutableArray<BoundExpression> typeArguments) 
         {
             Debug.Assert(!formalParameterTypes.IsDefault);
             Debug.Assert(formalParameterRefKinds.IsDefault || formalParameterRefKinds.Length == formalParameterTypes.Length);
@@ -2351,6 +2353,17 @@ OuterBreak:
                         formalParameterTypes[i],
                         getArgumentKind(i)
                     )
+                );
+            }
+
+            numberArgumentsToProcess = System.Math.Min(typeParameters.Length, typeArguments.Length);
+            for (int i = 0; i < numberArgumentsToProcess; i++)
+            {
+                resultBuilder.Add(
+                    new Constraint(
+                        typeArguments[i],
+                        TypeWithAnnotations.Create(typeParameters[i]),
+                        TypeBoundKind.Exact)
                 );
             }
 

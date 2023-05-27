@@ -6182,6 +6182,22 @@ namespace Microsoft.CodeAnalysis.CSharp
             return nameSyntax.Kind() != SyntaxKind.GenericName;
         }
 
+        private static bool HasTypeArgumentsToInfer(BoundNode node) 
+        {
+            if (node.Syntax is not InvocationExpressionSyntax { } syntax)
+            {
+                return false;
+            }
+
+            var nameSyntax = Binder.GetNameSyntax(syntax, out _);
+            if (nameSyntax == null)
+            {
+                return false;
+            }
+            nameSyntax = nameSyntax.GetUnqualifiedName();
+            return nameSyntax.DescendantNodes().OfType<InferredTypeArgumentSyntax>().Count() > 0;
+        }
+
         protected override void VisitArguments(ImmutableArray<BoundExpression> arguments, ImmutableArray<RefKind> refKindsOpt, MethodSymbol method)
         {
             // Callers should be using VisitArguments overload below.
@@ -6235,6 +6251,22 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private delegate (MethodSymbol? method, bool returnNotNull) ArgumentsCompletionDelegate(ImmutableArray<VisitArgumentResult> argumentResults, ImmutableArray<ParameterSymbol> parametersOpt, MethodSymbol? method);
 
+        private ImmutableArray<TypeWithAnnotations> getTypeArguments(BoundNode node)
+        {
+            if (node.Syntax is not InvocationExpressionSyntax { } stx)
+            {
+                return ImmutableArray<TypeWithAnnotations>.Empty;
+            }
+
+            var nameStx = Binder.GetNameSyntax(stx.Expression, out _);
+            if (nameStx.GetUnqualifiedName() is not GenericNameSyntax { } gen)
+            {
+                return ImmutableArray<TypeWithAnnotations>.Empty;
+            }
+
+            return gen.TypeArgumentList.Arguments.SelectAsArray(x => _binder.BindType(x, BindingDiagnosticBag.GetInstance()));
+        }
+
         private (MethodSymbol? method, ImmutableArray<VisitArgumentResult> results, bool returnNotNull, ArgumentsCompletionDelegate? completion)
         VisitArguments(
             BoundNode node,
@@ -6287,9 +6319,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // Re-infer method type parameters
                 if (method?.IsGenericMethod == true)
                 {
-                    if (HasImplicitTypeArguments(node))
+                    if (HasImplicitTypeArguments(node) || HasTypeArgumentsToInfer(node))
                     {
-                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded);
+                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, getTypeArguments(node), expanded);
                         parametersOpt = method.Parameters;
                     }
                     if (ConstraintsHelper.RequiresChecking(method))
@@ -7098,6 +7130,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<BoundExpression> arguments,
             ImmutableArray<RefKind> argumentRefKindsOpt,
             ImmutableArray<int> argsToParamsOpt,
+            ImmutableArray<TypeWithAnnotations> typeArgs,
             bool expanded)
         {
             Debug.Assert(method.IsGenericMethod);
@@ -7129,15 +7162,20 @@ namespace Microsoft.CodeAnalysis.CSharp
                 parameterRefKinds: out ImmutableArray<RefKind> parameterRefKinds);
             refKinds.Free();
 
+            var typeArgsBuilder = ArrayBuilder<TypeWithAnnotations>.GetInstance();
+            typeArgsBuilder.AddRange(typeArgs);
+
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
             var result = TypeInferrer.Infer(
                 _binder,
                 _conversions,
-                TypeInferrer.MakeTypeVariables(definition.TypeParameters, ArrayBuilder<TypeWithAnnotations>.GetInstance()),
+                TypeInferrer.MakeTypeVariables(definition.TypeParameters, typeArgsBuilder),
                 TypeInferrer.MakeConstraints(
                     parameterTypes,
                     parameterRefKinds,
-                    arguments),
+                    arguments,
+                    definition.TypeParameters,
+                    typeArgs.SelectAsArray(x => (BoundExpression)new BoundTypeExpression(x.Type.GetNonNullSyntaxNode(),null, x.Type))),
                 definition.ContainingType.TypeSubstitution,
                 ref discardedUseSiteInfo,
                 new MethodInferenceExtensions(this)
@@ -9052,7 +9090,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         arguments.Add(new BoundExpressionWithNullability(syntax, new BoundParameter(syntax, parameter), parameterType.NullableAnnotation, parameterType.Type));
                     }
                     Debug.Assert(_binder is object);
-                    method = InferMethodTypeArguments(method, arguments.ToImmutableAndFree(), argumentRefKindsOpt: default, argsToParamsOpt: default, expanded: false);
+                    method = InferMethodTypeArguments(method, arguments.ToImmutableAndFree(), argumentRefKindsOpt: default, argsToParamsOpt: default, typeArgs: ImmutableArray<TypeWithAnnotations>.Empty,expanded: false);
                 }
                 if (invokedAsExtensionMethod)
                 {
@@ -9420,7 +9458,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         {
                             placeholderArgs.Add(new BoundExpressionWithNullability(variables[i].Expression.Syntax, variables[i].Expression, NullableAnnotation.Oblivious, conversion.DeconstructionInfo.OutputPlaceholders[i].Type));
                         }
-                        deconstructMethod = InferMethodTypeArguments(deconstructMethod, placeholderArgs.ToImmutableAndFree(), invocation.ArgumentRefKindsOpt, invocation.ArgsToParamsOpt, invocation.Expanded);
+                        deconstructMethod = InferMethodTypeArguments(deconstructMethod, placeholderArgs.ToImmutableAndFree(), invocation.ArgumentRefKindsOpt, invocation.ArgsToParamsOpt, ImmutableArray<TypeWithAnnotations>.Empty, invocation.Expanded);
 
                         // check the constraints remain valid with the re-inferred parameter types
                         if (ConstraintsHelper.RequiresChecking(deconstructMethod))
