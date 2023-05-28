@@ -276,7 +276,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 foreach (var bound in collectedBound)
                 {
                     if (ContainsTypeVariable(bound))
-                        ExactOrBoundsInference(kind, bound, target, ref useSiteInfo);
+                        ExactOrBoundsInference(kind,target, bound, ref useSiteInfo);
                 }
             }
         }
@@ -325,9 +325,19 @@ namespace Microsoft.CodeAnalysis.CSharp
         private bool HasBound(int typeVariableIndex)
         {
             Debug.Assert(ValidIndex(typeVariableIndex));
-            return _lowerBounds[typeVariableIndex] != null ||
-                _upperBounds[typeVariableIndex] != null ||
-                _exactBounds[typeVariableIndex] != null;
+            return (_lowerBounds[typeVariableIndex] != null && HasNonDependentBound(_lowerBounds[typeVariableIndex])) ||
+                (_upperBounds[typeVariableIndex] != null && HasNonDependentBound(_upperBounds[typeVariableIndex])) ||
+                (_exactBounds[typeVariableIndex] != null && HasNonDependentBound(_exactBounds[typeVariableIndex]));
+        }
+
+        private bool HasNonDependentBound(HashSet<TypeWithAnnotations> collectedBound) 
+        {
+            foreach (var item in collectedBound)
+            {
+                if (!ContainsTypeVariable(item)) return true;
+            }
+
+            return false;
         }
 
         private ImmutableArray<(ITypeVariableInternal, TypeWithAnnotations)> GetResults(out bool inferredFromFunctionType)
@@ -2003,7 +2013,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private InferenceResult FixDependentParameters(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            return FixParameters((inferrer, index) => inferrer.AnyDependsOn(index, DependencyKind.Funcation) && inferrer.AnyDependsOn(index, DependencyKind.TypeVariable), ref useSiteInfo);
+            return FixParameters((inferrer, index) => inferrer.AnyDependsOn(index, DependencyKind.Funcation) || inferrer.AnyDependsOn(index, DependencyKind.TypeVariable), ref useSiteInfo);
         }
 
         private InferenceResult FixParameters(
