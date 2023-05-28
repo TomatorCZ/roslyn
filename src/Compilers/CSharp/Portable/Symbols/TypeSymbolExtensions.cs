@@ -750,6 +750,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
                 TypeWithAnnotations next;
 
+                if (current.Kind == SymbolKind.InferredType)
+                    return null;
+
                 switch (current.TypeKind)
                 {
                     case TypeKind.Dynamic:

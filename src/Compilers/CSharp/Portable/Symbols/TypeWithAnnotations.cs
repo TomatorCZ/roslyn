@@ -434,7 +434,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             TypeSymbol typeSymbol = this.Type;
             var newTypeWithModifiers = typeMap.SubstituteType(typeSymbol);
 
-            if (!typeSymbol.IsTypeParameter())
+            if (!typeSymbol.IsTypeParameter() && typeSymbol.Kind != SymbolKind.InferredType)
             {
                 Debug.Assert(newTypeWithModifiers.NullableAnnotation.IsOblivious() || (typeSymbol.IsNullableType() && newTypeWithModifiers.NullableAnnotation.IsAnnotated()));
                 Debug.Assert(newTypeWithModifiers.CustomModifiers.IsEmpty);
@@ -452,6 +452,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 }
 
                 return Create(newTypeWithModifiers.Type, NullableAnnotation, newCustomModifiers);
+            }
+
+            if (typeSymbol.Kind == SymbolKind.InferredType)
+            {
+                return newTypeWithModifiers;
             }
 
             if (newTypeWithModifiers.Is((TypeParameterSymbol)typeSymbol) &&

@@ -90,6 +90,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             Indirect = 0x12
         }
 
+        private enum DependencyKind 
+        {
+            Funcation,
+            TypeVariable
+        }
+
         #region State
 
         private readonly CSharpCompilation _compilation;
@@ -109,6 +115,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         #endregion
 
+        private readonly TypeVariableMap _map;
         private readonly ImmutableArray<Constraint> _constraints;
         private readonly Extensions _extensions;
 
@@ -126,6 +133,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             _constraints = constraints;
             _extensions = extensions ?? Extensions.Default;
             _substitutions = substitutions;
+            _map = new TypeVariableMap();
             _fixedResults = new (TypeWithAnnotations, bool)[typeVariables.Length];
             _upperBounds = new HashSet<TypeWithAnnotations>[typeVariables.Length];
             _lowerBounds = new HashSet<TypeWithAnnotations>[typeVariables.Length];
@@ -184,6 +192,101 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             collectedBounds[typeVariableIndex].Add(addedBound);
+        }
+
+        private void AddBoundAndDoFurtherInference(TypeWithAnnotations addedBound, TypeWithAnnotations typeVariableWithAnnotations, TypeBoundKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            int varIndex = GetTypeVariableIndex((ITypeVariableInternal)typeVariableWithAnnotations.Type);
+
+            var bounds = kind switch
+            {
+                TypeBoundKind.Upper => _upperBounds,
+                TypeBoundKind.Lower => _lowerBounds,
+                TypeBoundKind.Exact => _exactBounds,
+            };
+
+            if (bounds[varIndex] != null && bounds[varIndex].Contains(addedBound))
+                return;
+
+            if (ContainsTypeVariable(addedBound))
+            {
+                for (int i = 0; i < _typeVariables.Length; i++)
+                {
+                    if (ContainsTypeVariable(addedBound.Type, _typeVariables[i]))
+                    {
+                        _variableDependencies[varIndex, i] = Dependency.Direct;
+                        _variableDependenciesDirty = true;
+                    }
+                }
+
+                DoInference(addedBound, _exactBounds[varIndex], kind, ref useSiteInfo);
+                DoInference(addedBound, _lowerBounds[varIndex], TypeBoundKind.Lower, ref useSiteInfo);
+                DoInference(addedBound, _upperBounds[varIndex], TypeBoundKind.Upper, ref useSiteInfo);
+            }
+            else if (DependsOnAny(varIndex, DependencyKind.TypeVariable))
+            {
+                DoInferenceForTypeVars(addedBound, _exactBounds[varIndex], kind, ref useSiteInfo);
+                DoInferenceForTypeVars(addedBound, _lowerBounds[varIndex], TypeBoundKind.Upper, ref useSiteInfo);
+                DoInferenceForTypeVars(addedBound, _upperBounds[varIndex], TypeBoundKind.Lower, ref useSiteInfo);
+            }
+
+            AddBound(addedBound, bounds, typeVariableWithAnnotations);
+        }
+
+        private void UpdateBoundsAfterFix(int typeVarIdx) 
+        {
+            var typeVar = _typeVariables[typeVarIdx];
+
+            for (int i = 0; i < _typeVariables.Length; i++)
+            {
+                if (_variableDependencies[i, typeVarIdx] == Dependency.Direct) 
+                {
+                    if (_lowerBounds[i] != null)
+                        SubstituteTypeVariable(typeVar, _lowerBounds[i]);
+                    if (_upperBounds[i] != null)
+                        SubstituteTypeVariable(typeVar, _upperBounds[i]);
+                    if (_exactBounds[i] != null)
+                        SubstituteTypeVariable(typeVar, _exactBounds[i]);
+                }
+            }
+        }
+
+        private void SubstituteTypeVariable(ITypeVariableInternal typeVar, HashSet<TypeWithAnnotations> collectedBound) 
+        {
+            var replace = collectedBound.Where(x => ContainsTypeVariable(x.Type, typeVar)).ToList();
+            collectedBound.RemoveAll(replace);
+            collectedBound.AddAll(replace.Select(x => _map.SubstituteType(x)));
+        }
+
+        private void DoInference(TypeWithAnnotations source, HashSet<TypeWithAnnotations> collectedBound, TypeBoundKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            if (collectedBound != null)
+            {
+                foreach (var bound in collectedBound)
+                {
+                    ExactOrBoundsInference(kind, bound, source, ref useSiteInfo);
+                }
+            }
+        }
+
+        private void DoInferenceForTypeVars(TypeWithAnnotations target, HashSet<TypeWithAnnotations> collectedBound, TypeBoundKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            if (collectedBound != null)
+            {
+                foreach (var bound in collectedBound)
+                {
+                    if (ContainsTypeVariable(bound))
+                        ExactOrBoundsInference(kind, bound, target, ref useSiteInfo);
+                }
+            }
+        }
+
+        private bool ContainsTypeVariable(TypeWithAnnotations type) 
+        {
+            for (int i = 0; i < _typeVariables.Length; i++)
+                if (ContainsTypeVariable(type.Type, _typeVariables[i])) return true;
+
+            return false;
         }
 
         private static NamedTypeSymbol GetInterfaceInferenceBound(ImmutableArray<NamedTypeSymbol> interfaces, NamedTypeSymbol target)
@@ -317,6 +420,8 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             Debug.Assert(!_constraints.IsDefault);
 
+            InitializeVariableDependency();
+
             for (int arg = 0, length = _constraints.Length; arg < length; arg++)
             {
                 BoundExpression source = _constraints[arg].Source;
@@ -383,7 +488,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         #region The second phase
         private bool InferTypeVarsSecondPhase(Binder binder, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            InitializeDependencies();
+            InitializeFunctionDependencies();
+            DeduceAllDependencies(DependencyKind.TypeVariable);
+
             while (true)
             {
                 var res = DoSecondPhase(binder, ref useSiteInfo);
@@ -482,7 +589,17 @@ namespace Microsoft.CodeAnalysis.CSharp
         #endregion
 
         #region Dependencies
-        private void InitializeDependencies()
+        private void InitializeVariableDependency() 
+        {
+            Debug.Assert(_variableDependencies == null);
+            _variableDependencies = new Dependency[_typeVariables.Length, _typeVariables.Length];
+
+            for (int i = 0; i < _typeVariables.Length; i++)
+                for (int j = 0; j < _typeVariables.Length; j++)
+                    _variableDependencies[i, j] = Dependency.NotDependent;
+        }
+
+        private void InitializeFunctionDependencies()
         {
             Debug.Assert(_functionDependencies == null);
             _functionDependencies = new Dependency[_typeVariables.Length, _typeVariables.Length];
@@ -500,39 +617,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
 
-            DeduceAllDependencies();
-        }
-
-        private bool DependsOn(int iParam, int jParam)
-        {
-            Debug.Assert(_functionDependencies != null);
-
-            Debug.Assert(0 <= iParam && iParam < _typeVariables.Length);
-            Debug.Assert(0 <= jParam && jParam < _typeVariables.Length);
-
-            if (_functionDependenciesDirty)
-            {
-                SetIndirectsToUnknown();
-                DeduceAllDependencies();
-            }
-            return 0 != ((_functionDependencies[iParam, jParam]) & Dependency.DependsMask);
-        }
-
-        private bool DependsTransitivelyOn(int iParam, int jParam)
-        {
-            Debug.Assert(_functionDependencies != null);
-            Debug.Assert(ValidIndex(iParam));
-            Debug.Assert(ValidIndex(jParam));
-
-            for (int kParam = 0; kParam < _typeVariables.Length; ++kParam)
-            {
-                if (((_functionDependencies[iParam, kParam]) & Dependency.DependsMask) != 0 &&
-                    ((_functionDependencies[kParam, jParam]) & Dependency.DependsMask) != 0)
-                {
-                    return true;
-                }
-            }
-            return false;
+            DeduceAllDependencies(DependencyKind.Funcation);
         }
 
         private bool DependsDirectlyOn(int iParam, int jParam)
@@ -556,30 +641,34 @@ namespace Microsoft.CodeAnalysis.CSharp
             return false;
         }
 
-        private void DeduceAllDependencies()
+        private void DeduceAllDependencies(DependencyKind kind)
         {
+            ref bool dirtyFlag = ref GetDirtyFlag(kind);
+
             bool madeProgress;
             do
             {
-                madeProgress = DeduceDependencies();
+                madeProgress = DeduceDependencies(kind);
             } while (madeProgress);
-            SetUnknownsToNotDependent();
-            _functionDependenciesDirty = false;
+            SetUnknownsToNotDependent(kind);
+            dirtyFlag = false;
         }
 
-        private bool DeduceDependencies()
+        private bool DeduceDependencies(DependencyKind kind)
         {
-            Debug.Assert(_functionDependencies != null);
+            var dependencies = GetDependencies(kind);
+
+            Debug.Assert(dependencies != null);
             bool madeProgress = false;
             for (int iParam = 0; iParam < _typeVariables.Length; ++iParam)
             {
                 for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
                 {
-                    if (_functionDependencies[iParam, jParam] == Dependency.Unknown)
+                    if (dependencies[iParam, jParam] == Dependency.Unknown)
                     {
-                        if (DependsTransitivelyOn(iParam, jParam))
+                        if (DependsTransitivelyOn(iParam, jParam, kind))
                         {
-                            _functionDependencies[iParam, jParam] = Dependency.Indirect;
+                            dependencies[iParam, jParam] = Dependency.Indirect;
                             madeProgress = true;
                         }
                     }
@@ -588,42 +677,18 @@ namespace Microsoft.CodeAnalysis.CSharp
             return madeProgress;
         }
 
-        private void SetUnknownsToNotDependent()
+        private bool DependsTransitivelyOn(int iParam, int jParam, DependencyKind kind)
         {
-            Debug.Assert(_functionDependencies != null);
-            for (int iParam = 0; iParam < _typeVariables.Length; ++iParam)
-            {
-                for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
-                {
-                    if (_functionDependencies[iParam, jParam] == Dependency.Unknown)
-                    {
-                        _functionDependencies[iParam, jParam] = Dependency.NotDependent;
-                    }
-                }
-            }
-        }
+            var dependencies = GetDependencies(kind);
 
-        private void SetIndirectsToUnknown()
-        {
-            Debug.Assert(_functionDependencies != null);
-            for (int iParam = 0; iParam < _typeVariables.Length; ++iParam)
-            {
-                for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
-                {
-                    if (_functionDependencies[iParam, jParam] == Dependency.Indirect)
-                    {
-                        _functionDependencies[iParam, jParam] = Dependency.Unknown;
-                    }
-                }
-            }
-        }
-
-        private bool DependsOnAny(int iParam)
-        {
+            Debug.Assert(dependencies != null);
             Debug.Assert(ValidIndex(iParam));
-            for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
+            Debug.Assert(ValidIndex(jParam));
+
+            for (int kParam = 0; kParam < _typeVariables.Length; ++kParam)
             {
-                if (DependsOn(iParam, jParam))
+                if (((dependencies[iParam, kParam]) & Dependency.DependsMask) != 0 &&
+                    ((dependencies[kParam, jParam]) & Dependency.DependsMask) != 0)
                 {
                     return true;
                 }
@@ -631,12 +696,63 @@ namespace Microsoft.CodeAnalysis.CSharp
             return false;
         }
 
-        private bool AnyDependsOn(int iParam)
+        private void SetUnknownsToNotDependent(DependencyKind kind)
+        {
+            var dependencies = GetDependencies(kind);
+
+            Debug.Assert(dependencies != null);
+            for (int iParam = 0; iParam < _typeVariables.Length; ++iParam)
+            {
+                for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
+                {
+                    if (dependencies[iParam, jParam] == Dependency.Unknown)
+                    {
+                        dependencies[iParam, jParam] = Dependency.NotDependent;
+                    }
+                }
+            }
+        }
+
+        private bool DependsOn(int iParam, int jParam, DependencyKind kind)
+        {
+            var dependencies = GetDependencies(kind);
+            ref bool dirtyFlag = ref GetDirtyFlag(kind);
+
+            Debug.Assert(dependencies != null);
+            Debug.Assert(0 <= iParam && iParam < _typeVariables.Length);
+            Debug.Assert(0 <= jParam && jParam < _typeVariables.Length);
+
+            if (dirtyFlag)
+            {
+                SetIndirectsToUnknown(kind);
+                DeduceAllDependencies(kind);
+            }
+            return 0 != ((dependencies[iParam, jParam]) & Dependency.DependsMask);
+        }
+
+        private void SetIndirectsToUnknown(DependencyKind kind)
+        {
+            var dependencies = GetDependencies(kind);
+
+            Debug.Assert(dependencies != null);
+            for (int iParam = 0; iParam < _typeVariables.Length; ++iParam)
+            {
+                for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
+                {
+                    if (dependencies[iParam, jParam] == Dependency.Indirect)
+                    {
+                        dependencies[iParam, jParam] = Dependency.Unknown;
+                    }
+                }
+            }
+        }
+
+        private bool DependsOnAny(int iParam, DependencyKind kind)
         {
             Debug.Assert(ValidIndex(iParam));
             for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
             {
-                if (DependsOn(jParam, iParam))
+                if (DependsOn(iParam, jParam, kind))
                 {
                     return true;
                 }
@@ -644,19 +760,55 @@ namespace Microsoft.CodeAnalysis.CSharp
             return false;
         }
 
-        private void UpdateDependenciesAfterFix(int iParam)
+        private bool AnyDependsOn(int iParam, DependencyKind kind)
         {
             Debug.Assert(ValidIndex(iParam));
-            if (_functionDependencies == null)
+            for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
+            {
+                if (DependsOn(jParam, iParam, kind))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void UpdateDependenciesAfterFix(int iParam, DependencyKind kind)
+        {
+            var dependencies = GetDependencies(kind);
+            ref bool dirtyFlag = ref GetDirtyFlag(kind);
+
+            Debug.Assert(ValidIndex(iParam));
+            if (dependencies == null)
             {
                 return;
             }
             for (int jParam = 0; jParam < _typeVariables.Length; ++jParam)
             {
-                _functionDependencies[iParam, jParam] = Dependency.NotDependent;
-                _functionDependencies[jParam, iParam] = Dependency.NotDependent;
+                dependencies[iParam, jParam] = Dependency.NotDependent;
+                dependencies[jParam, iParam] = Dependency.NotDependent;
             }
-            _functionDependenciesDirty = true;
+            dirtyFlag = true;
+        }
+
+        private ref bool GetDirtyFlag(DependencyKind kind)
+        {
+            switch (kind)
+            {
+                case DependencyKind.Funcation: return ref _functionDependenciesDirty;
+                case DependencyKind.TypeVariable: return ref _variableDependenciesDirty;
+                default: throw new Exception();
+            }
+        }
+
+        private Dependency[,] GetDependencies(DependencyKind kind)
+        {
+            switch (kind)
+            {
+                case DependencyKind.Funcation: return _functionDependencies;
+                case DependencyKind.TypeVariable: return _variableDependencies;
+                default: throw new Exception();
+            }
         }
         #endregion
 
@@ -994,7 +1146,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return;
             }
 
-            if (ExactTypeVariableInference(source, target))
+            if (ExactTypeVariableInference(source, target, ref useSiteInfo))
             {
                 return;
             }
@@ -1015,14 +1167,14 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        private bool ExactTypeVariableInference(TypeWithAnnotations source, TypeWithAnnotations target)
+        private bool ExactTypeVariableInference(TypeWithAnnotations source, TypeWithAnnotations target, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
             Debug.Assert(source.HasType);
             Debug.Assert(target.HasType);
 
             if (IsUnfixedTypeVariable(target))
             {
-                AddBound(source, _exactBounds, target);
+                AddBoundAndDoFurtherInference(source, target, TypeBoundKind.Exact, ref useSiteInfo);
                 return true;
             }
             return false;
@@ -1208,7 +1360,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return;
             }
 
-            if (LowerBoundTypeVariableInference(source, target))
+            if (LowerBoundTypeVariableInference(source, target, ref useSiteInfo))
             {
                 return;
             }
@@ -1257,14 +1409,14 @@ namespace Microsoft.CodeAnalysis.CSharp
             return true;
         }
 
-        private bool LowerBoundTypeVariableInference(TypeWithAnnotations source, TypeWithAnnotations target)
+        private bool LowerBoundTypeVariableInference(TypeWithAnnotations source, TypeWithAnnotations target, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
             Debug.Assert(source.HasType);
             Debug.Assert(target.HasType);
 
             if (IsUnfixedTypeVariable(target))
             {
-                AddBound(source, _lowerBounds, target);
+                AddBoundAndDoFurtherInference(source, target, TypeBoundKind.Lower, ref useSiteInfo);
                 return true;
             }
             return false;
@@ -1575,7 +1727,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return;
             }
 
-            if (UpperBoundTypeVariableInference(source, target))
+            if (UpperBoundTypeVariableInference(source, target, ref useSiteInfo))
             {
                 return;
             }
@@ -1598,14 +1750,14 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        private bool UpperBoundTypeVariableInference(TypeWithAnnotations source, TypeWithAnnotations target)
+        private bool UpperBoundTypeVariableInference(TypeWithAnnotations source, TypeWithAnnotations target, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
             Debug.Assert(source.HasType);
             Debug.Assert(target.HasType);
 
             if (IsUnfixedTypeVariable(target))
             {
-                AddBound(source, _upperBounds, target);
+                AddBoundAndDoFurtherInference(source, target, TypeBoundKind.Upper, ref useSiteInfo);
                 return true;
             }
             return false;
@@ -1846,12 +1998,12 @@ namespace Microsoft.CodeAnalysis.CSharp
         #region Fixing
         private InferenceResult FixNondependentParameters(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index), ref useSiteInfo);
+            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Funcation) && !inferrer.DependsOnAny(index, DependencyKind.TypeVariable), ref useSiteInfo);
         }
 
         private InferenceResult FixDependentParameters(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            return FixParameters((inferrer, index) => inferrer.AnyDependsOn(index), ref useSiteInfo);
+            return FixParameters((inferrer, index) => inferrer.AnyDependsOn(index, DependencyKind.Funcation) && inferrer.AnyDependsOn(index, DependencyKind.TypeVariable), ref useSiteInfo);
         }
 
         private InferenceResult FixParameters(
@@ -1909,7 +2061,10 @@ namespace Microsoft.CodeAnalysis.CSharp
 #endif
 
             _fixedResults[iParam] = best;
-            UpdateDependenciesAfterFix(iParam);
+            _map.Add(_typeVariables[iParam], best.Type);
+            UpdateBoundsAfterFix(iParam);
+            UpdateDependenciesAfterFix(iParam, DependencyKind.Funcation);
+            UpdateDependenciesAfterFix(iParam, DependencyKind.TypeVariable);
             return true;
         }
 
