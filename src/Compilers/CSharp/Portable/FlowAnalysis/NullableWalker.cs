@@ -6189,7 +6189,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return false;
             }
 
-            var nameSyntax = Binder.GetNameSyntax(syntax, out _);
+            var nameSyntax = Binder.GetNameSyntax(syntax.Expression, out _);
             if (nameSyntax == null)
             {
                 return false;
@@ -7166,18 +7166,20 @@ namespace Microsoft.CodeAnalysis.CSharp
             typeArgsBuilder.AddRange(typeArgs);
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
+
+            var typeVars = TypeInferrer.MakeTypeVariables(definition.TypeParameters, typeArgsBuilder);
             var result = TypeInferrer.Infer(
                 _binder,
                 _conversions,
-                TypeInferrer.MakeTypeVariables(definition.TypeParameters, typeArgsBuilder),
+                typeVars,
                 TypeInferrer.MakeConstraints(
                     parameterTypes,
                     parameterRefKinds,
-                    arguments,
-                    definition.TypeParameters,
-                    typeArgs.SelectAsArray(x => (BoundExpression)new BoundTypeExpression(x.Type.GetNonNullSyntaxNode(),null, x.Type))),
+                    arguments
+                ),
                 definition.ContainingType.TypeSubstitution,
                 ref discardedUseSiteInfo,
+                typeVars.Select(x => (x is TypeParameterSymbol { } s && typeArgsBuilder.Count > 0) ? typeArgsBuilder[s.Ordinal] : default).ToArray(),
                 new MethodInferenceExtensions(this)
                 );
 
@@ -7190,16 +7192,72 @@ namespace Microsoft.CodeAnalysis.CSharp
             //    parameterRefKinds,
             //    arguments,
             //    ref discardedUseSiteInfo,
-            //    new MethodInferenceExtensions(this));
+            //    new MethodInferenceExtensions1(this));
 
             if (!result.Success)
             {
+                Diagnostics.Add(ErrorCode.WRN_NullableInference, method.GetFirstLocation());
                 return method;
             }
 
+            //return definition.Construct(result.InferredTypeArguments);
             return definition.Construct(TypeInferrer.GetInferredTypeParameters(definition.ContainingType, definition.TypeParameters, result));
         }
 
+
+        private sealed class MethodInferenceExtensions1 : MethodTypeInferrer.Extensions
+        {
+            private readonly NullableWalker _walker;
+
+            internal MethodInferenceExtensions1(NullableWalker walker)
+            {
+                _walker = walker;
+            }
+
+            internal override TypeWithAnnotations GetTypeWithAnnotations(BoundExpression expr)
+            {
+                return TypeWithAnnotations.Create(expr.GetTypeOrFunctionType(), GetNullableAnnotation(expr));
+            }
+
+            /// <summary>
+            /// Return top-level nullability for the expression. This method should be called on a limited
+            /// set of expressions only. It should not be called on expressions tracked by flow analysis
+            /// other than <see cref="BoundKind.ExpressionWithNullability"/> which is an expression
+            /// specifically created in NullableWalker to represent the flow analysis state.
+            /// </summary>
+            private static NullableAnnotation GetNullableAnnotation(BoundExpression expr)
+            {
+                switch (expr.Kind)
+                {
+                    case BoundKind.DefaultLiteral:
+                    case BoundKind.DefaultExpression:
+                    case BoundKind.Literal:
+                        return expr.ConstantValueOpt == ConstantValue.NotAvailable || !expr.ConstantValueOpt.IsNull || expr.IsSuppressed ? NullableAnnotation.NotAnnotated : NullableAnnotation.Annotated;
+                    case BoundKind.ExpressionWithNullability:
+                        return ((BoundExpressionWithNullability)expr).NullableAnnotation;
+                    case BoundKind.MethodGroup:
+                    case BoundKind.UnboundLambda:
+                    case BoundKind.UnconvertedObjectCreationExpression:
+                    case BoundKind.ConvertedTupleLiteral:
+                        return NullableAnnotation.NotAnnotated;
+                    default:
+                        Debug.Assert(false); // unexpected value
+                        return NullableAnnotation.Oblivious;
+                }
+            }
+
+            internal override TypeWithAnnotations GetMethodGroupResultType(BoundMethodGroup group, MethodSymbol method)
+            {
+                if (_walker.TryGetMethodGroupReceiverNullability(group.ReceiverOpt, out TypeWithState receiverType))
+                {
+                    if (!method.IsStatic)
+                    {
+                        method = (MethodSymbol)AsMemberOfType(receiverType.Type, method);
+                    }
+                }
+                return method.ReturnTypeWithAnnotations;
+            }
+        }
         private sealed class MethodInferenceExtensions : TypeInferrer.Extensions
         {
             private readonly NullableWalker _walker;

@@ -315,6 +315,8 @@
                 case ErrorCode.WRN_CapturedPrimaryConstructorParameterPassedToBase:
                 case ErrorCode.WRN_UnreadPrimaryConstructorParameter:
                 case ErrorCode.WRN_AddressOfInAsync:
+                case ErrorCode.WRN_TypeHintsDynamic:
+                case ErrorCode.WRN_NullableInference:
                     return true;
                 default:
                     return false;

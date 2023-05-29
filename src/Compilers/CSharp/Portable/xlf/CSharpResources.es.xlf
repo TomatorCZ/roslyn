@@ -2277,6 +2277,11 @@
         <target state="translated">Las ramas del operador condicional ref hacen referencia a variables con ámbitos de declaración incompatibles</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_NullableInference">
+        <source>Nullable method type inference failed.</source>
+        <target state="new">Nullable method type inference failed.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_ObsoleteMembersShouldNotBeRequired">
         <source>Required member '{0}' should not be attributed with 'ObsoleteAttribute' unless the containing type is obsolete or all constructors are obsolete.</source>
         <target state="translated">El miembro requerido '{0}' no se debe atribuir con 'ObsoleteAttribute' a menos que el tipo contenedor esté obsoleto o todos los constructores estén obsoletos.</target>
@@ -4349,6 +4354,11 @@
       <trans-unit id="WRN_TupleBinopLiteralNameMismatch_Title">
         <source>The tuple element name is ignored because a different name or no name is specified on the other side of the tuple == or != operator.</source>
         <target state="translated">No se tiene en cuenta el nombre de elemento de tupla porque no se ha especificado ningún nombre, o se ha especificado uno diferente, en el otro lado del operador == o != de la tupla.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_TypeHintsDynamic">
+        <source>Type hints don't work in runtime binding</source>
+        <target state="new">Type hints don't work in runtime binding</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">

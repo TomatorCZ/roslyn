@@ -2277,6 +2277,11 @@
         <target state="translated">Gałęzie operatora warunkowego ref nie mogą przywoływać zmiennych z niezgodnymi zakresami deklaracji</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_NullableInference">
+        <source>Nullable method type inference failed.</source>
+        <target state="new">Nullable method type inference failed.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_ObsoleteMembersShouldNotBeRequired">
         <source>Required member '{0}' should not be attributed with 'ObsoleteAttribute' unless the containing type is obsolete or all constructors are obsolete.</source>
         <target state="translated">Wymagana składowa „{0}” nie powinna mieć atrybutu „ObsoleteAttribute”, chyba że zawierający typ jest przestarzały lub wszystkie konstruktory są przestarzałe.</target>
@@ -4349,6 +4354,11 @@
       <trans-unit id="WRN_TupleBinopLiteralNameMismatch_Title">
         <source>The tuple element name is ignored because a different name or no name is specified on the other side of the tuple == or != operator.</source>
         <target state="translated">Nazwa elementu krotki została zignorowana, ponieważ po drugiej stronie operatora == lub != krotki określono inną nazwę lub nie określono żadnej nazwy.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_TypeHintsDynamic">
+        <source>Type hints don't work in runtime binding</source>
+        <target state="new">Type hints don't work in runtime binding</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">

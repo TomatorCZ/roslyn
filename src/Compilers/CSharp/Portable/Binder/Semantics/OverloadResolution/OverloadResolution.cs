@@ -11,6 +11,7 @@ using System.Linq;
 using System.Reflection.Metadata.Ecma335;
 using Microsoft.Cci;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Collections;
 using Microsoft.CodeAnalysis.Symbols;
@@ -3443,7 +3444,7 @@ outerDefault:
             bool hasTypeArgumentsInferredFromFunctionType = false;
             if (member.Kind == SymbolKind.Method && (method = (MethodSymbol)(Symbol)member).Arity > 0)
             {
-                if (typeArgumentsBuilder.Count == 0 && arguments.HasDynamicArgument && !inferWithDynamic)
+                if ((typeArgumentsBuilder.Count == 0 || typeArgumentsBuilder.Any(IsInferredType)) && arguments.HasDynamicArgument && !inferWithDynamic)
                 {
                     // Spec 7.5.4: Compile-time checking of dynamic overload resolution:
                     // * First, if F is a generic method and type arguments were provided, 
@@ -3574,35 +3575,39 @@ outerDefault:
             // from the original definition, not the method as it exists as a member of 
             // a possibly constructed generic type, is exceedingly subtle. See the comments
             // in "Infer" for details.
+            var typeVars = TypeInferrer.MakeTypeVariables(originalTypeParameters, typeArguments);
+
             var inferenceResult = TypeInferrer.Infer(
                 _binder,
                 _binder.Conversions,
-                TypeInferrer.MakeTypeVariables(originalTypeParameters, typeArguments),
+                typeVars,
                 TypeInferrer.MakeConstraints(
                     originalEffectiveParameters.ParameterTypes,
                     originalEffectiveParameters.ParameterRefKinds,
-                    args,
-                    originalTypeParameters,
-                    typeArguments.SelectAsArray(x => (BoundExpression)new BoundTypeExpression(x.Type.GetNonNullSyntaxNode(),null, x.Type))),
+                    args),
                 method.ContainingType.TypeSubstitution,
-                ref useSiteInfo
+                ref useSiteInfo,
+                typeVars.Select(x => (x is TypeParameterSymbol { } s && typeArguments.Count > 0) ? typeArguments[s.Ordinal] : default).ToArray()
                 );
 
-            //var inferenceResult = MethodTypeInferrer.Infer(
-                //_binder,
-                //_binder.Conversions,
-                //originalTypeParameters,
-                //method.ContainingType,
-                //originalEffectiveParameters.ParameterTypes,
-                //originalEffectiveParameters.ParameterRefKinds,
-                //args,
-                //ref useSiteInfo);
+            //var inferenceResult2 = MethodTypeInferrer.Infer(
+            //    _binder,
+            //    _binder.Conversions,
+            //    originalTypeParameters,
+            //    method.ContainingType,
+            //    originalEffectiveParameters.ParameterTypes,
+            //    originalEffectiveParameters.ParameterRefKinds,
+            //    args,
+            //    ref useSiteInfo);
 
             if (inferenceResult.Success)
             {
                 hasTypeArgumentsInferredFromFunctionType = inferenceResult.HasTypeVariableInferredFromFunctionType;
                 error = default(MemberAnalysisResult);
                 return TypeInferrer.GetInferredTypeParameters(method.ContainingType, originalTypeParameters, inferenceResult);
+                //hasTypeArgumentsInferredFromFunctionType = inferenceResult.HasTypeArgumentInferredFromFunctionType;
+                //error = default(MemberAnalysisResult);
+                //return inferenceResult.InferredTypeArguments;
             }
 
             if (arguments.IsExtensionMethodInvocation)

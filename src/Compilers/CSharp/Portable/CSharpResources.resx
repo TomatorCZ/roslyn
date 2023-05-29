@@ -7511,4 +7511,10 @@ To remove the warning, you can use /reference instead (set the Embed Interop Typ
   <data name="ERR_UnsupportedPrimaryConstructorParameterCapturingRefAny" xml:space="preserve">
     <value>Cannot use primary constructor parameter of type '{0}' inside an instance member</value>
   </data>
+  <data name="WRN_TypeHintsDynamic" xml:space="preserve">
+    <value>Type hints don't work in runtime binding</value>
+  </data>
+  <data name="WRN_NullableInference" xml:space="preserve">
+    <value>Nullable method type inference failed.</value>
+  </data>
 </root>

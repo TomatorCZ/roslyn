@@ -2194,6 +2194,8 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         #endregion
 
+        WRN_TypeHintsDynamic = 9137,
+        WRN_NullableInference = 9138,
         // Note: you will need to do the following after adding warnings:
         //  1) Re-generate compiler code (eng\generate-compiler-code.cmd).
     }

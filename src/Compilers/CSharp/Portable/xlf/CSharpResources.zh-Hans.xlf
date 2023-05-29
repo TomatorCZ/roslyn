@@ -2277,6 +2277,11 @@
         <target state="translated">ref 条件运算符的分支引用具有不兼容声明范围的变量</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_NullableInference">
+        <source>Nullable method type inference failed.</source>
+        <target state="new">Nullable method type inference failed.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_ObsoleteMembersShouldNotBeRequired">
         <source>Required member '{0}' should not be attributed with 'ObsoleteAttribute' unless the containing type is obsolete or all constructors are obsolete.</source>
         <target state="translated">除非包含类型已过时或所有构造函数已过时，否则不应将所需的成员'{0}'归属于 'ObsoleteAttribute'。</target>
@@ -4354,6 +4359,11 @@
       <trans-unit id="WRN_TupleBinopLiteralNameMismatch_Title">
         <source>The tuple element name is ignored because a different name or no name is specified on the other side of the tuple == or != operator.</source>
         <target state="translated">由于元组 == 或 != 运算符的另一侧指定了其他名称或未指定名称，因此元组元素名称被忽略。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_TypeHintsDynamic">
+        <source>Type hints don't work in runtime binding</source>
+        <target state="new">Type hints don't work in runtime binding</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
