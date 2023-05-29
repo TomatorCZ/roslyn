@@ -1207,6 +1207,37 @@ public class Test
         }
 
         #region MyTypeInference
+        [Fact]
+        public void TEST() 
+        {
+            //new InferredTypeArgumentSyntax(default, default, default).ToString();
+            var source = """
+#nullable enable
+public class Program 
+{
+    public void M() 
+    {
+        //var a = 1;
+        //string? a = "";
+        //Foo<_>(a);
+        Foo<A<_,_>>(new G<int, string>());
+        //Foo<object>(new());
+        //Foo<G<_>>(1);
+        //Bar(1);
+    }
+    //string Bar(string a) { return "";}
+    //int Bar(int a) {return 1;}
+    void Foo<T>(T p1) {}
+}
+
+public class A<T1, T2> {}
+public class G<T1, T2> : A<T1, T2>{}
+#nullable disable
+""";
+
+            var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics();
+        }
 
         [Fact]
         public void MethodTypeHints_Simple() 
@@ -1266,6 +1297,45 @@ public class Program
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics();
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "void GH.F1<System.Int32, System.String>(System.String p2)",
+                "void GH.F2<System.Int32, System.Int32>(System.Int32 p1, System.Int32 p2)",
+                "void GH.F2<System.Int32>(System.Int32 p1, System.Int32 p2)",
+                "void GH.F2<System.Int32>(System.Int32 p1, System.Int32 p2)",
+                "void GH.F3<System.Int32, System.Byte, System.String, System.Int16>(GC2<System.Byte, System.Int16> p24)",
+                "void GH.F4<System.Int32, System.Int32, System.String>(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                "System.String System.Int32.ToString()",
+                "void GH.F5<System.Byte>(System.Byte p1)",
+                "void GH.F5(System.Int32 p1)",
+                "void B1<System.Int32, System.String>(System.String p2)",
+                "void B3<System.Int32, System.Byte, System.String, System.Int16>(GC2<System.Byte, System.Int16> p24)",
+                "void B4<System.Int32, System.Int32, System.String>(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                "System.String System.Int32.ToString()"
+            };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
+
+        private static void CheckCallSites(SemanticModel model, InvocationExpressionSyntax[] invocations, string[] callsites)
+        {
+            Assert.True(invocations.Length == callsites.Length);
+            for (int i = 0; i < invocations.Length; i++)
+                CheckCallSite(model, invocations[i], callsites[i]);
+        }
+
+        private static void CheckCallSite(SemanticModel model, InvocationExpressionSyntax invocation, string callsite)
+        {
+            Assert.Null(model.GetDeclaredSymbol(invocation));
+            Assert.NotNull(model.GetTypeInfo(invocation).Type);
+            var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
+            var text = symbol.ToTestDisplayString(includeNonNullable: true);
+            Assert.NotNull(symbol);
+            Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
         }
 
         [Fact]
@@ -1278,7 +1348,7 @@ public class Program
     {
         B1<int> temp = new B1<int>();
         B2<int, string> temp2 = new B2<int, string>();
-        C2<int, B> temp3 = new C2<int, B>()
+        C2<int, B> temp3 = new C2<int, B>();
         
         F1<A1<_>>(temp); // F1<A1<int>>(A1<int>)
         F1<A2<_, string>>(temp2); // F1<A2<int, string>>
@@ -1294,11 +1364,23 @@ public class A1<T> {}
 public class A2<T1, T2> {}
 public class B1<T> : A1<T> {}
 public class B2<T1, T2> : A2<T1, T2> {}
-public interface I2<in T1, in T2> {}
+public interface I2<in T1, out T2> {}
 public class C2<T1, T2> : I2<T1, T2> {}
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics();
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "void Program.F1<A1<System.Int32>>(A1<System.Int32> p1)",
+                "void Program.F1<A2<System.Int32, System.String>>(A2<System.Int32, System.String> p1)",
+                "void Program.F1<I2<System.Int32, A>>(I2<System.Int32, A> p1)"
+            };
+
+            CheckCallSites(model, methodCalls, callsites);
         }
 
         [Fact]
@@ -1314,6 +1396,8 @@ public class Program
         string? temp1 = null;
         string temp2 = "";
         C2<int, string> temp3 = new C2<int, string>();
+        C2<int, string?> temp4 = new C2<int, string?>();
+
         F1<int, _>(temp1); // F1<int, string>(string?)
         F1<int, _>(temp2); // F1<int, string>(string?)
         F1<int?, _>(temp1); // F1<int, string>(string?)
@@ -1322,20 +1406,65 @@ public class Program
         F2<int, _>(temp2); // F2<int, string>(string)
         F2<int?, _>(temp1); // F2<int, string?>(string?)
         F2<int?, _>(temp2); // F2<int?, string>(string)
+
+
         F<I2<_, string?>>(temp3); // F<I2<int, string?>>(C2<int, string?>)
-        F<C2<_, string?>>(temp3); // F<C2<int, string?>>(C2<int, string?>)
+        F<C2<_, string?>>(temp3); // Error: Can't infer
+        F<I2<_, _>>(temp3); // F<I2<int, string!>>(C2<int, string!>)
+        F<C2<_, _>>(temp3); // F<C2<int, string!>>(C2<int, string!>)
+        F<I2<_, _>>(temp4); // F<I2<int, string?>>(C2<int, string?>)
+        F<C2<_, _>>(temp4); // F<C2<int, string?>>(C2<int, string?>)
+        F<I2<_, string>>(temp4); // Error: Can't infer
+        F<C2<_, string>>(temp4); // Error: Can't infer
     } 
 
     public static void F1<T1, T2>(T2? p2) { }
     public static void F2<T1, T2>(T2 p2) { }
     public static void F<T1>(T1 p1) {}
+    public static void F<T1>(T1 p1, T1 p2) {}
 }
 
 public class A {}
-public interface I2<in T1, in T2> {}
+public interface I2<in T1, out T2> {}
 public class C2<T1, T2> : I2<T1, T2> {}
 """;
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics( new[] {
+                // (34,24): warning CS9138: Nullable method type inference failed.
+                //     public static void F<T1>(T1 p1) {}
+                Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(34, 24),
+                // (34,24): warning CS9138: Nullable method type inference failed.
+                //     public static void F<T1>(T1 p1) {}
+                Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(34, 24),
+                // (34,24): warning CS9138: Nullable method type inference failed.
+                //     public static void F<T1>(T1 p1) {}
+                Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(34, 24)
+            });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "void Program.F1<System.Int32, System.String!>(System.String? p2)",
+                "void Program.F1<System.Int32, System.String!>(System.String? p2)",
+                "void Program.F1<System.Int32?, System.String!>(System.String? p2)",
+                "void Program.F1<System.Int32?, System.String!>(System.String? p2)",
+                "void Program.F2<System.Int32, System.String?>(System.String? p2)",
+                "void Program.F2<System.Int32, System.String!>(System.String! p2)",
+                "void Program.F2<System.Int32?, System.String?>(System.String? p2)",
+                "void Program.F2<System.Int32?, System.String!>(System.String! p2)",
+                "void Program.F<I2<System.Int32, System.String?>!>(I2<System.Int32, System.String?>! p1)",
+                "void Program.F<C2<System.Int32, System.String>>(C2<System.Int32, System.String> p1)",
+                "void Program.F<I2<System.Int32, System.String!>!>(I2<System.Int32, System.String!>! p1)",
+                "void Program.F<C2<System.Int32, System.String!>!>(C2<System.Int32, System.String!>! p1)",
+                "void Program.F<I2<System.Int32, System.String?>!>(I2<System.Int32, System.String?>! p1)",
+                "void Program.F<C2<System.Int32, System.String?>!>(C2<System.Int32, System.String?>! p1)",
+                "void Program.F<I2<System.Int32, System.String>>(I2<System.Int32, System.String> p1)",
+                "void Program.F<C2<System.Int32, System.String>>(C2<System.Int32, System.String> p1)"
+            };
+
+            CheckCallSites(model, methodCalls, callsites);
         }
 
         [Fact]
@@ -1347,9 +1476,9 @@ public class Program
     public static void M1()
     {
         dynamic temp = "";
-        Foo<string,_>("", temp, 1); // Error typeof(p3) == string + Warnining -> hints will be not used in binding
-        Foo<int, string>(1, temp, 1); // Warnining -> hints will be not used in binding
-        temp.Foo<string, _>(temp); // Warning -> hints will be not used in binding 
+        Foo<string,_>("", temp, 1); // Warning -> hints will be not used in binding, we can go better (substitute the hint and check the simple cases)
+        Foo<_, string>(1, temp, 1); // Warnining -> hints will be not used in binding
+        temp.Foo<string, _>(temp); 
     }
 
     public static void Foo<T1, T2>(T1 p1, T2 p2, T1 p3) {}
@@ -1357,6 +1486,14 @@ public class Program
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics(new[] {
+                // (6,9): warning CS9137: Type hints doesn't work in runtime binding
+                //         Foo<string,_>("", temp, 1); // Error typeof(p3) == string + Warnining -> hints will be not used in binding
+                Diagnostic(ErrorCode.WRN_TypeHintsDynamic, @"Foo<string,_>("""", temp, 1)").WithLocation(6, 9),
+                // (7,9): warning CS9137: Type hints doesn't work in runtime binding
+                //         Foo<_, string>(1, temp, 1); // Warnining -> hints will be not used in binding
+                Diagnostic(ErrorCode.WRN_TypeHintsDynamic, "Foo<_, string>(1, temp, 1)").WithLocation(7, 9)
+            });
         }
 
         [Fact]
@@ -1371,7 +1508,7 @@ public class Program
     {
         GH.F1<_,_>(""); // Error: can't infer T1
         GH.F1<_,int>(""); // Error: T2 == int
-        GH.F1<string,byte>(257); // Error: T2 = byte
+        GH.F1<_,byte>(257); // Error: T2 = byte
     }
 }
 
@@ -1382,20 +1519,26 @@ public class GH
 """;
 
             var compilation = CreateCSharpCompilation(source);
-        }
-
-        [Fact]
-        public void TypeHints_WrongPlaces() 
-        {
-            var source = """
-public class A<_> // Error
-{
-    public static void Foo<_>() {} // Error
-    public static void Bar<T>(A<_> p1) {} // Error
-}
-""";
-
-            var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics(new[] {
+                // (7,12): error CS0411: The type arguments for method 'GH.F1<T1, T2>(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         GH.F1<_,_>(""); // Error: can't infer T1
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(7, 12),
+                // (8,12): error CS0411: The type arguments for method 'GH.F1<T1, T2>(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         GH.F1<_,int>(""); // Error: T2 == int
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,int>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(8, 12),
+                // (9,12): error CS0411: The type arguments for method 'GH.F1<T1, T2>(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         GH.F1<_,byte>(257); // Error: T2 = byte
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,byte>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(9, 12),
+                // (15,24): warning CS9138: Nullable method type inference failed.
+                //     public static void F1<T1, T2>(T2 p2) { }
+                Diagnostic(ErrorCode.WRN_NullableInference, "F1").WithLocation(15, 24),
+                // (15,24): warning CS9138: Nullable method type inference failed.
+                //     public static void F1<T1, T2>(T2 p2) { }
+                Diagnostic(ErrorCode.WRN_NullableInference, "F1").WithLocation(15, 24),
+                // (15,24): warning CS9138: Nullable method type inference failed.
+                //     public static void F1<T1, T2>(T2 p2) { }
+                Diagnostic(ErrorCode.WRN_NullableInference, "F1").WithLocation(15, 24)
+            });
         }
 
         [Fact]
