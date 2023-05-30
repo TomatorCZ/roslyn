@@ -1338,6 +1338,23 @@ public class Program
             Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
         }
 
+        private static void CheckCallSites(SemanticModel model, ObjectCreationExpressionSyntax[] invocations, string[] callsites)
+        {
+            Assert.True(invocations.Length == callsites.Length);
+            for (int i = 0; i < invocations.Length; i++)
+                CheckCallSite(model, invocations[i], callsites[i]);
+        }
+
+        private static void CheckCallSite(SemanticModel model, ObjectCreationExpressionSyntax invocation, string callsite)
+        {
+            Assert.Null(model.GetDeclaredSymbol(invocation));
+            Assert.NotNull(model.GetTypeInfo(invocation).Type);
+            var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
+            var text = symbol.ToTestDisplayString(includeNonNullable: true);
+            Assert.NotNull(symbol);
+            Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
+        }
+
         [Fact]
         public void MethodTypeHints_Nested() 
         {
@@ -1547,23 +1564,22 @@ public class GH
             var source = """
 using System;
 
-public class Program {}
+public class Program
 {
-    public static void M() 
+    public static void Main() 
     {
         new C1<int, _>("hi"); // C1<int, string>(string)
         new C2<_, _>(1,1); // C2<int, int>(int, int)
-        new C2<_>(1,1); C2<int>(int, int)
-        new C2(1,1); // Error: C2 is not defined
+        new C2<_>(1,1); //C2<int>(int, int)
         new C3<int, _, string, _>(new GC2<byte, short>()); // C3<int, byte, string, short>(GC2<byte, short>)
         new C4<_, _, string>(intVal => intVal + 1, x => x.ToString(), str => str.Length); // C4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
-        new C5((byte)1); // Error: typeof(p1) == int
         new C5(1); // C5(int)
     }
 }
 
 public class A<T> {}
 public class B<T> : A<T> {}
+public class GC2<T1, T2> {}
 
 public class C1<T1, T2> 
 {
@@ -1597,10 +1613,27 @@ public class C5<T1>
 
 public class C5 
 {
-    public C5(int p1) {}
+    public C5(byte p1) {}
 }
 """;
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "C1<System.Int32, System.String>.C1(System.String p2)",
+                "C2<System.Int32, System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
+                "C2<System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
+                "C3<System.Int32, System.Byte, System.String, System.Int16>.C3(GC2<System.Byte, System.Int16> p24)",
+                "GC2<System.Byte, System.Int16>.GC2()",
+                "C4<System.Int32, System.Int32, System.String>.C4(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                "C5.C5(System.Byte p1)",
+            };
+
+            CheckCallSites(model, methodCalls, callsites);
         }
 
         [Fact]
@@ -1710,6 +1743,8 @@ public class Program
         new F1<_,_>(""); // Error: can't infer T1
         new F1<_,int>(""); // Error: T2 == int
         new F1<string,byte>(257); // Error: T2 = byte
+        //new C2(1,1); // Error: C2 is not defined
+        //new C5(257); // Error: typeof(p1) == int
     }
 }
 
@@ -1907,6 +1942,7 @@ public class Program
             var compilation = CreateCSharpCompilation(source);
         }
 
+        //TODO: Add tests for expanded version of calls
         #endregion
     }
 }
