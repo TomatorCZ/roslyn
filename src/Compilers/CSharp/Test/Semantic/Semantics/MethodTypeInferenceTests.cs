@@ -1257,6 +1257,8 @@ public class Program
         GH.F4<_, _, string>(intVal => intVal + 1, x => x.ToString(),str => str.Length); // // GH.F4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
         GH.F5((byte)1); // GH.F5<byte>(byte)
         GH.F5(1); // GH.F5(int)
+        GH.F6<_>(1, new GC1<byte>()); // GH.F6<byte>(int p1, params GC1[] args)
+        GH.F6<_>(1, new GC1<byte>(), new GC1<byte>()); // GH.F6<byte>(int p1, params GC1[] args)
     }
 
     public static void M2() 
@@ -1293,6 +1295,8 @@ public class Program
 
         public static void F5<T1>(T1 p1) {}
         public static void F5(int p1) {}
+
+        public static void F6<T>(int p1, params GC1<T>[] args) {}
     }
 """;
 
@@ -1312,6 +1316,8 @@ public class Program
                 "System.String System.Int32.ToString()",
                 "void GH.F5<System.Byte>(System.Byte p1)",
                 "void GH.F5(System.Int32 p1)",
+                "void GH.F6<System.Byte>(System.Int32 p1, params GC1<System.Byte>[] args)",
+                "void GH.F6<System.Byte>(System.Int32 p1, params GC1<System.Byte>[] args)",
                 "void B1<System.Int32, System.String>(System.String p2)",
                 "void B3<System.Int32, System.Byte, System.String, System.Int16>(GC2<System.Byte, System.Int16> p24)",
                 "void B4<System.Int32, System.Int32, System.String>(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
@@ -1350,7 +1356,6 @@ public class Program
             Assert.Null(model.GetDeclaredSymbol(invocation));
             Assert.NotNull(model.GetTypeInfo(invocation).Type);
             var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
-            var text = symbol.ToTestDisplayString(includeNonNullable: true);
             Assert.NotNull(symbol);
             Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
         }
@@ -1568,18 +1573,22 @@ public class Program
 {
     public static void Main() 
     {
+        var temp1 = new GC1<byte>();
         new C1<int, _>("hi"); // C1<int, string>(string)
         new C2<_, _>(1,1); // C2<int, int>(int, int)
         new C2<_>(1,1); //C2<int>(int, int)
         new C3<int, _, string, _>(new GC2<byte, short>()); // C3<int, byte, string, short>(GC2<byte, short>)
         new C4<_, _, string>(intVal => intVal + 1, x => x.ToString(), str => str.Length); // C4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
         new C5(1); // C5(int)
+        new C6<_>(1, temp1); // C6<byte>(int p1, params GC1[] args)
+        new C6<_>(1, temp1, temp1); // C6<byte>(int p1, params GC1[] args)
     }
 }
 
 public class A<T> {}
 public class B<T> : A<T> {}
 public class GC2<T1, T2> {}
+public class GC1<T> {}
 
 public class C1<T1, T2> 
 {
@@ -1615,6 +1624,11 @@ public class C5
 {
     public C5(byte p1) {}
 }
+
+public class C6<T>
+{
+    public C6(int p1, params GC1<T>[] args) {}
+}
 """;
             var compilation = CreateCSharpCompilation(source);
             compilation.VerifyDiagnostics();
@@ -1624,6 +1638,7 @@ public class C5
 
             var methodCalls = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
             string[] callsites = new[] {
+                "GC1<System.Byte>.GC1()",
                 "C1<System.Int32, System.String>.C1(System.String p2)",
                 "C2<System.Int32, System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
                 "C2<System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
@@ -1631,6 +1646,8 @@ public class C5
                 "GC2<System.Byte, System.Int16>.GC2()",
                 "C4<System.Int32, System.Int32, System.String>.C4(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
                 "C5.C5(System.Byte p1)",
+                "C6<System.Byte>.C6(System.Int32 p1, params GC1<System.Byte>[] args)",
+                "C6<System.Byte>.C6(System.Int32 p1, params GC1<System.Byte>[] args)"
             };
 
             CheckCallSites(model, methodCalls, callsites);
