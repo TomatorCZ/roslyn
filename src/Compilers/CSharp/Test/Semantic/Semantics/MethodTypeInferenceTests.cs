@@ -1419,7 +1419,7 @@ public class Program
         string temp2 = "";
         C2<int, string> temp3 = new C2<int, string>();
         C2<int, string?> temp4 = new C2<int, string?>();
-
+        
         F1<int, _>(temp1); // F1<int, string>(string?)
         F1<int, _>(temp2); // F1<int, string>(string?)
         F1<int?, _>(temp1); // F1<int, string>(string?)
@@ -1452,6 +1452,15 @@ public class C2<T1, T2> : I2<T1, T2> {}
 """;
             var compilation = CreateCSharpCompilation(source);
             compilation.VerifyDiagnostics( new[] {
+                    // (23,27): warning CS8620: Argument of type 'C2<int, string>' cannot be used for parameter 'p1' of type 'C2<int, string?>' in 'void Program.F<C2<int, string?>>(C2<int, string?> p1)' due to differences in the nullability of reference types.
+                //         F<C2<_, string?>>(temp3); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp3").WithArguments("C2<int, string>", "C2<int, string?>", "p1", "void Program.F<C2<int, string?>>(C2<int, string?> p1)").WithLocation(23, 27),
+                // (28,26): warning CS8620: Argument of type 'C2<int, string?>' cannot be used for parameter 'p1' of type 'I2<int, string>' in 'void Program.F<I2<int, string>>(I2<int, string> p1)' due to differences in the nullability of reference types.
+                //         F<I2<_, string>>(temp4); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp4").WithArguments("C2<int, string?>", "I2<int, string>", "p1", "void Program.F<I2<int, string>>(I2<int, string> p1)").WithLocation(28, 26),
+                // (29,26): warning CS8620: Argument of type 'C2<int, string?>' cannot be used for parameter 'p1' of type 'C2<int, string>' in 'void Program.F<C2<int, string>>(C2<int, string> p1)' due to differences in the nullability of reference types.
+                //         F<C2<_, string>>(temp4); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp4").WithArguments("C2<int, string?>", "C2<int, string>", "p1", "void Program.F<C2<int, string>>(C2<int, string> p1)").WithLocation(29, 26),
                 // (34,24): warning CS9138: Nullable method type inference failed.
                 //     public static void F<T1>(T1 p1) {}
                 Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(34, 24),
@@ -1477,13 +1486,13 @@ public class C2<T1, T2> : I2<T1, T2> {}
                 "void Program.F2<System.Int32?, System.String?>(System.String? p2)",
                 "void Program.F2<System.Int32?, System.String!>(System.String! p2)",
                 "void Program.F<I2<System.Int32, System.String?>!>(I2<System.Int32, System.String?>! p1)",
-                "void Program.F<C2<System.Int32, System.String>>(C2<System.Int32, System.String> p1)",
+                "void Program.F<C2<System.Int32, System.String?>!>(C2<System.Int32, System.String?>! p1)",
                 "void Program.F<I2<System.Int32, System.String!>!>(I2<System.Int32, System.String!>! p1)",
                 "void Program.F<C2<System.Int32, System.String!>!>(C2<System.Int32, System.String!>! p1)",
                 "void Program.F<I2<System.Int32, System.String?>!>(I2<System.Int32, System.String?>! p1)",
                 "void Program.F<C2<System.Int32, System.String?>!>(C2<System.Int32, System.String?>! p1)",
-                "void Program.F<I2<System.Int32, System.String>>(I2<System.Int32, System.String> p1)",
-                "void Program.F<C2<System.Int32, System.String>>(C2<System.Int32, System.String> p1)"
+                "void Program.F<I2<System.Int32, System.String!>!>(I2<System.Int32, System.String!>! p1)",
+                "void Program.F<C2<System.Int32, System.String!>!>(C2<System.Int32, System.String!>! p1)"
             };
 
             CheckCallSites(model, methodCalls, callsites);
@@ -1661,19 +1670,30 @@ public class Program
 {
     public static void M1() {
         var temp = new B<int>();
-    new C5<A<_>>(temp); // C5<A<int>>(A<int>)
+        new C5<A<_>>(temp); // C5<A<int>>(A<int>)
     }
 }
 public class A<T> {}
 public class B<T> : A<T> {}
 
-public class C5 
+public class C5<T> 
 {
-    public C5(int p1) {}
+    public C5(T p1) {}
 }
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "B<System.Int32>.B()",
+                "C5<A<System.Int32>>.C5(A<System.Int32> p1)"
+            };
+            CheckCallSites(model, methodCalls, callsites);
         }
 
         [Fact]
@@ -1689,6 +1709,7 @@ public class Program
         string? temp1 = null;
         string temp2 = "";
         C2<int, string> temp3 = new C2<int, string>();
+        C2<int, string?> temp4 = new C2<int, string?>();
         new F1<int, _>(temp1); // F1<int, string>(string?)
         new F1<int, _>(temp2); // F1<int, string>(string?)
         new F1<int?, _>(temp1); // F1<int, string>(string?)
@@ -1697,8 +1718,15 @@ public class Program
         new F2<int, _>(temp2); // F2<int, string>(string)
         new F2<int?, _>(temp1); // F2<int, string?>(string?)
         new F2<int?, _>(temp2); // F2<int?, string>(string)
+        
         new F<I2<_, string?>>(temp3); // F<I2<int, string?>>(C2<int, string?>)
-        new F<C2<_, string?>>(temp3); // F<C2<int, string?>>(C2<int, string?>)
+        new F<C2<_, string?>>(temp3); // Error: Can't infer
+        new F<I2<_, _>>(temp3); // F<I2<int, string!>>(C2<int, string!>)
+        new F<C2<_, _>>(temp3); // F<C2<int, string!>>(C2<int, string!>)
+        new F<I2<_, _>>(temp4); // F<I2<int, string?>>(C2<int, string?>)
+        new F<C2<_, _>>(temp4); // F<C2<int, string?>>(C2<int, string?>)
+        new F<I2<_, string>>(temp4); // Error: Can't infer
+        new F<C2<_, string>>(temp4); // Error: Can't infer
     } 
 
 }
@@ -1706,23 +1734,70 @@ public class Program
 
 public class F1<T1, T2> 
 {
-    public F(T2? p2) { }
+    public F1(T2? p2) { }
 }
 public class F2<T1, T2> 
 {
     public F2(T2 p2) { }
 }
-public class F<T1, T2> 
+public class F<T1> 
 {
     public F(T1 p1) {}
 }
 
 public class A {}
-public interface I2<in T1, in T2> {}
+public interface I2<in T1, out T2> {}
 public class C2<T1, T2> : I2<T1, T2> {}
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics(new[] {
+                // (21,31): warning CS8620: Argument of type 'C2<int, string>' cannot be used for parameter 'p1' of type 'C2<int, string?>' in 'F<C2<int, string?>>.F(C2<int, string?> p1)' due to differences in the nullability of reference types.
+                //         new F<C2<_, string?>>(temp3); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp3").WithArguments("C2<int, string>", "C2<int, string?>", "p1", "F<C2<int, string?>>.F(C2<int, string?> p1)").WithLocation(21, 31),
+                // (26,30): warning CS8620: Argument of type 'C2<int, string?>' cannot be used for parameter 'p1' of type 'I2<int, string>' in 'F<I2<int, string>>.F(I2<int, string> p1)' due to differences in the nullability of reference types.
+                //         new F<I2<_, string>>(temp4); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp4").WithArguments("C2<int, string?>", "I2<int, string>", "p1", "F<I2<int, string>>.F(I2<int, string> p1)").WithLocation(26, 30),
+                // (27,30): warning CS8620: Argument of type 'C2<int, string?>' cannot be used for parameter 'p1' of type 'C2<int, string>' in 'F<C2<int, string>>.F(C2<int, string> p1)' due to differences in the nullability of reference types.
+                //         new F<C2<_, string>>(temp4); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp4").WithArguments("C2<int, string?>", "C2<int, string>", "p1", "F<C2<int, string>>.F(C2<int, string> p1)").WithLocation(27, 30),
+                // (43,12): warning CS9138: Nullable method type inference failed.
+                //     public F(T1 p1) {}
+                Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(43, 12),
+                // (43,12): warning CS9138: Nullable method type inference failed.
+                //     public F(T1 p1) {}
+                Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(43, 12),
+                // (43,12): warning CS9138: Nullable method type inference failed.
+                //     public F(T1 p1) {}
+                Diagnostic(ErrorCode.WRN_NullableInference, "F").WithLocation(43, 12)
+            });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "C2<System.Int32, System.String!>.C2()",
+                "C2<System.Int32, System.String?>.C2()",
+                "F1<System.Int32, System.String!>.F1(System.String? p2)",
+                "F1<System.Int32, System.String!>.F1(System.String? p2)",
+                "F1<System.Int32?, System.String!>.F1(System.String? p2)",
+                "F1<System.Int32?, System.String!>.F1(System.String? p2)",
+                "F2<System.Int32, System.String?>.F2(System.String? p2)",
+                "F2<System.Int32, System.String!>.F2(System.String! p2)",
+                "F2<System.Int32?, System.String?>.F2(System.String? p2)",
+                "F2<System.Int32?, System.String!>.F2(System.String! p2)",
+                "F<I2<System.Int32, System.String?>!>.F(I2<System.Int32, System.String?>! p1)",
+                "F<C2<System.Int32, System.String?>!>.F(C2<System.Int32, System.String?>! p1)",
+                "F<I2<System.Int32, System.String!>!>.F(I2<System.Int32, System.String!>! p1)",
+                "F<C2<System.Int32, System.String!>!>.F(C2<System.Int32, System.String!>! p1)",
+                "F<I2<System.Int32, System.String?>!>.F(I2<System.Int32, System.String?>! p1)",
+                "F<C2<System.Int32, System.String?>!>.F(C2<System.Int32, System.String?>! p1)",
+                "F<I2<System.Int32, System.String!>!>.F(I2<System.Int32, System.String!>! p1)",
+                "F<C2<System.Int32, System.String!>!>.F(C2<System.Int32, System.String!>! p1)"
+            };
+            //TODO: What to do when nullable type inference fails ?
+            CheckCallSites(model, methodCalls, callsites);
         }
 
         [Fact]
@@ -1959,7 +2034,7 @@ public class Program
             var compilation = CreateCSharpCompilation(source);
         }
 
-        //TODO: Add tests for expanded version of calls
+        //TODO: Add tests for array creation
         #endregion
     }
 }

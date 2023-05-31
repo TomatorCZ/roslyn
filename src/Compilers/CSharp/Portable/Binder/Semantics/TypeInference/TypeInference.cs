@@ -2237,11 +2237,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (!shape.IsDefault)
             {
                 exact ??= new HashSet<TypeWithAnnotations>();
-                lower ??= new HashSet<TypeWithAnnotations>();
-                upper ??= new HashSet<TypeWithAnnotations>();
                 exact.Add(shape);
-                lower.Add(shape);
-                upper.Add(shape);
             }
 
             var candidates = new Dictionary<TypeWithAnnotations, TypeWithAnnotations>(EqualsIgnoringDynamicTupleNamesAndNullabilityComparer.Instance);
@@ -2257,7 +2253,11 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             lower = removeTypes(lower, static type => isFunctionType(type, out var functionType) && functionType.GetInternalDelegateType() is null);
 
-            if (exact == null)
+            if (!shape.IsDefault)
+            {
+                candidates.Add(shape, shape);
+            }
+            else if (exact == null)
             {
                 if (lower != null)
                 {

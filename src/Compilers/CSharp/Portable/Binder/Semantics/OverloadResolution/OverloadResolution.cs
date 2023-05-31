@@ -3656,6 +3656,7 @@ outerDefault:
             // from the original definition, not the method as it exists as a member of 
             // a possibly constructed generic type, is exceedingly subtle. See the comments
             // in "Infer" for details.
+            
             var typeVars = TypeInferrer.MakeTypeVariables(originalTypeParameters, typeArguments);
 
             var inferenceResult = TypeInferrer.Infer(

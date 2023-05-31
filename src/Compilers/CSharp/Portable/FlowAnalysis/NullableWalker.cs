@@ -3475,14 +3475,14 @@ namespace Microsoft.CodeAnalysis.CSharp
             MethodSymbol? constructor = getConstructor(node, node.Type);
             var arguments = node.Arguments;
 
-            (_, ImmutableArray<VisitArgumentResult> argumentResults, _, ArgumentsCompletionDelegate? argumentsCompletion) =
+            (MethodSymbol s, ImmutableArray<VisitArgumentResult> argumentResults, _, ArgumentsCompletionDelegate? argumentsCompletion) =
                 VisitArguments(
                            node, arguments, node.ArgumentRefKindsOpt, constructor?.Parameters ?? default,
                            node.ArgsToParamsOpt, node.DefaultArguments, node.Expanded, invokedAsExtensionMethod: false,
                            constructor, delayCompletionForTargetMember: isTargetTyped);
             Debug.Assert(isTargetTyped == argumentsCompletion is not null);
 
-            var type = node.Type;
+            var type = s.ContainingType;
             (int slot, NullableFlowState resultState, Func<TypeSymbol, MethodSymbol?, int>? initialStateInferenceCompletion) = inferInitialObjectState(node, type, constructor, arguments, argumentResults, isTargetTyped);
 
             Action<int, TypeSymbol>? initializerCompletion = null;
@@ -3493,7 +3493,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             TypeWithState result = setAnalyzedNullability(node, type, argumentResults, argumentsCompletion, initialStateInferenceCompletion, initializerCompletion, resultState, isTargetTyped);
-            SetResultType(node, result, updateAnalyzedNullability: false);
+            SetResultType(node, result, false);
+            SetUpdatedSymbol(node, node.Constructor, s);
             return;
 
             TypeWithState setAnalyzedNullability(
@@ -6184,12 +6185,21 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private static bool HasTypeArgumentsToInfer(BoundNode node) 
         {
-            if (node.Syntax is not InvocationExpressionSyntax { } syntax)
+            NameSyntax nameSyntax;
+
+            if (node.Syntax is InvocationExpressionSyntax { } syntax1)
+            {
+                nameSyntax = Binder.GetNameSyntax(syntax1.Expression, out _);
+            }
+            else if (node.Syntax is ObjectCreationExpressionSyntax{ } syntax2)
+            {
+                nameSyntax = Binder.GetNameSyntax(syntax2.Type, out _);
+            }
+            else 
             {
                 return false;
             }
 
-            var nameSyntax = Binder.GetNameSyntax(syntax.Expression, out _);
             if (nameSyntax == null)
             {
                 return false;
@@ -6253,12 +6263,21 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private ImmutableArray<TypeWithAnnotations> getTypeArguments(BoundNode node)
         {
-            if (node.Syntax is not InvocationExpressionSyntax { } stx)
+            NameSyntax nameStx;
+            if (node.Syntax is InvocationExpressionSyntax { } stx1)
+            {
+                nameStx = Binder.GetNameSyntax(stx1.Expression, out _);
+
+            }
+            else if (node.Syntax is ObjectCreationExpressionSyntax { } stx2)
+            { 
+                nameStx = Binder.GetNameSyntax(stx2.Type, out _);
+            }
+            else
             {
                 return ImmutableArray<TypeWithAnnotations>.Empty;
             }
 
-            var nameStx = Binder.GetNameSyntax(stx.Expression, out _);
             if (nameStx.GetUnqualifiedName() is not GenericNameSyntax { } gen)
             {
                 return ImmutableArray<TypeWithAnnotations>.Empty;
@@ -6317,7 +6336,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
 
                 // Re-infer method type parameters
-                if (method?.IsGenericMethod == true)
+                if (method?.IsGenericMethod == true || (method.IsConstructor() && method.ContainingType.IsGenericType))
                 {
                     if (HasImplicitTypeArguments(node) || HasTypeArgumentsToInfer(node))
                     {
@@ -7133,11 +7152,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<TypeWithAnnotations> typeArgs,
             bool expanded)
         {
-            Debug.Assert(method.IsGenericMethod);
+            Debug.Assert(method.IsGenericMethod || (method.IsConstructor() && method.ContainingType.IsGenericType));
 
             // https://github.com/dotnet/roslyn/issues/27961 OverloadResolution.IsMemberApplicableInNormalForm and
             // IsMemberApplicableInExpandedForm use the least overridden method. We need to do the same here.
-            var definition = method.ConstructedFrom;
+            var definition = (method.IsConstructor()) ? method.OriginalDefinition : method.ConstructedFrom;
             var refKinds = ArrayBuilder<RefKind>.GetInstance();
             if (argumentRefKindsOpt != null)
             {
@@ -7167,7 +7186,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
 
-            var typeVars = TypeInferrer.MakeTypeVariables(definition.TypeParameters, typeArgsBuilder);
+            var typeVars = TypeInferrer.MakeTypeVariables((method.IsConstructor()) ? definition.ContainingType.TypeParameters : definition.TypeParameters, typeArgsBuilder);
             var result = TypeInferrer.Infer(
                 _binder,
                 _conversions,
@@ -7201,6 +7220,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             //return definition.Construct(result.InferredTypeArguments);
+            if (definition.IsConstructor()) 
+            {
+                return definition.ContainingType.Construct(TypeInferrer.GetInferredTypeParameters(definition.ContainingType, definition.ContainingType.TypeParameters, result)).Constructors.First(x => x.OriginalDefinition == definition);
+            }
+
             return definition.Construct(TypeInferrer.GetInferredTypeParameters(definition.ContainingType, definition.TypeParameters, result));
         }
 
