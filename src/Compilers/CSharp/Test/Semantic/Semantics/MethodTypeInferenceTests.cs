@@ -1809,7 +1809,7 @@ public class Program
     public static void M1()
     {
         dynamic temp = "";
-        var temp2 = new A<_, int>(temp, ""); // Error typeof(p2) == string + Warnining -> hints will be not used in binding
+        var temp2 = new A<_, int>(temp, 1); // Warning -> hints will be not used in binding
     }
 }
 
@@ -1820,6 +1820,11 @@ public class A<T1, T2>
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics(new[] { 
+                // (6,21): warning CS9138: Nullable method type inference failed.
+                //         var temp2 = new A<_, int>(temp, 1); // Warning -> hints will be not used in binding
+                Diagnostic(ErrorCode.WRN_NullableInference, "new A<_, int>(temp, 1)").WithLocation(6, 21)
+            });
         }
 
         [Fact]
@@ -1847,6 +1852,17 @@ public class F1<T1, T2>
 """;
 
             var compilation = CreateCSharpCompilation(source);
+            compilation.VerifyDiagnostics(
+                // (7,13): error CS0411: The type arguments for method 'F1<_, _>.F1(_)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,_>(""); // Error: can't infer T1
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("F1<_, _>.F1(_)").WithLocation(7, 13),
+                // (8,13): error CS0411: The type arguments for method 'F1<_, int>.F1(int)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,int>(""); // Error: T2 == int
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,int>").WithArguments("F1<_, int>.F1(int)").WithLocation(8, 13),
+                // (9,29): error CS1503: Argument 1: cannot convert from 'int' to 'byte'
+                //         new F1<string,byte>(257); // Error: T2 = byte
+                Diagnostic(ErrorCode.ERR_BadArgType, "257").WithArguments("1", "int", "byte").WithLocation(9, 29)
+            );
         }
 
         [Fact]

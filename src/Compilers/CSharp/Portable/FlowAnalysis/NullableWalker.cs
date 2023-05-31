@@ -3482,7 +3482,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                            constructor, delayCompletionForTargetMember: isTargetTyped);
             Debug.Assert(isTargetTyped == argumentsCompletion is not null);
 
-            var type = s.ContainingType;
+            var type = s?.ContainingType ?? node.Type;
             (int slot, NullableFlowState resultState, Func<TypeSymbol, MethodSymbol?, int>? initialStateInferenceCompletion) = inferInitialObjectState(node, type, constructor, arguments, argumentResults, isTargetTyped);
 
             Action<int, TypeSymbol>? initializerCompletion = null;
@@ -6336,7 +6336,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
 
                 // Re-infer method type parameters
-                if (method?.IsGenericMethod == true || (method.IsConstructor() && method.ContainingType.IsGenericType))
+                if (method?.IsGenericMethod == true || (method?.IsConstructor() == true && method?.ContainingType.IsGenericType == true))
                 {
                     if (HasImplicitTypeArguments(node) || HasTypeArgumentsToInfer(node))
                     {

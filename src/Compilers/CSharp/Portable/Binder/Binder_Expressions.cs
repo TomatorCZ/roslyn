@@ -5718,6 +5718,10 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (analyzedArguments.HasDynamicArgument)
             {
+                if (node.DescendantNodes().OfType<InferredTypeArgumentSyntax>().Count() >= 0)
+                {
+                    diagnostics.Add(ErrorCode.WRN_NullableInference, node.Location);
+                }
                 OverloadResolutionResult<MethodSymbol> overloadResolutionResult = OverloadResolutionResult<MethodSymbol>.GetInstance();
                 this.OverloadResolution.ObjectCreationOverloadResolution(GetAccessibleConstructorsForOverloadResolution(type, ref useSiteInfo), analyzedArguments, overloadResolutionResult, ref useSiteInfo);
                 diagnostics.Add(node, useSiteInfo);
