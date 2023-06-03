@@ -15,14 +15,15 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 {
     internal sealed partial class FunctionPointerTypeSymbol : TypeSymbol
     {
-        public static FunctionPointerTypeSymbol CreateFromSource(FunctionPointerTypeSyntax syntax, Binder typeBinder, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved, bool suppressUseSiteDiagnostics)
+        public static FunctionPointerTypeSymbol CreateFromSource(FunctionPointerTypeSyntax syntax, Binder typeBinder, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved, bool suppressUseSiteDiagnostics, bool allowInferredTypes = false)
             => new FunctionPointerTypeSymbol(
                 FunctionPointerMethodSymbol.CreateFromSource(
                     syntax,
                     typeBinder,
                     diagnostics,
                     basesBeingResolved,
-                    suppressUseSiteDiagnostics));
+                    suppressUseSiteDiagnostics,
+                    allowInferredTypes));
 
         /// <summary>
         /// Creates a function pointer from individual parts. This method should only be used when diagnostics are not needed. This is

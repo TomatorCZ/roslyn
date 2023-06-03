@@ -1501,7 +1501,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             Debug.Assert(node.Arity == typeArgumentList.Count);
 
             var typeArgumentsWithAnnotations = hasTypeArguments ?
-                BindTypeArguments(typeArgumentList, diagnostics) :
+                BindTypeArguments(typeArgumentList, diagnostics, allowInferredTypes: invoked && node.IsFeatureEnabled(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation)) :
                 default(ImmutableArray<TypeWithAnnotations>);
 
             var lookupResult = LookupResult.GetInstance();
@@ -6654,7 +6654,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
 
                 var typeArgumentsSyntax = right.Kind() == SyntaxKind.GenericName ? ((GenericNameSyntax)right).TypeArgumentList.Arguments : default(SeparatedSyntaxList<TypeSyntax>);
-                var typeArguments = typeArgumentsSyntax.Count > 0 ? BindTypeArguments(typeArgumentsSyntax, diagnostics) : default(ImmutableArray<TypeWithAnnotations>);
+                var typeArguments = typeArgumentsSyntax.Count > 0 ? BindTypeArguments(typeArgumentsSyntax, diagnostics, allowInferredTypes: invoked && node.IsFeatureEnabled(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation)) : default(ImmutableArray<TypeWithAnnotations>);
 
                 // A member-access consists of a primary-expression, a predefined-type, or a 
                 // qualified-alias-member, followed by a "." token, followed by an identifier, 
