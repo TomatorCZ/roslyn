@@ -719,7 +719,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             bool isVar;
             AliasSymbol alias;
-            TypeWithAnnotations declType = BindVariableTypeWithAnnotations(node.Declaration, diagnostics, typeSyntax, ref isConst, isVar: out isVar, alias: out alias);
+            TypeWithAnnotations declType = BindVariableTypeWithAnnotations(node.Declaration, diagnostics, typeSyntax, ref isConst, isVar: out isVar, alias: out alias, node.IsFeatureEnabled(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl));
 
             var kind = isConst ? LocalDeclarationKind.Constant : LocalDeclarationKind.RegularVariable;
             var variableList = node.Declaration.Variables;
@@ -784,7 +784,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return disposeMethod;
         }
 
-        private TypeWithAnnotations BindVariableTypeWithAnnotations(CSharpSyntaxNode declarationNode, BindingDiagnosticBag diagnostics, TypeSyntax typeSyntax, ref bool isConst, out bool isVar, out AliasSymbol alias)
+        private TypeWithAnnotations BindVariableTypeWithAnnotations(CSharpSyntaxNode declarationNode, BindingDiagnosticBag diagnostics, TypeSyntax typeSyntax, ref bool isConst, out bool isVar, out AliasSymbol alias, bool allowInferredTypes = false)
         {
             Debug.Assert(
                 declarationNode is VariableDesignationSyntax ||
@@ -797,7 +797,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             // we want to treat the declaration as an explicitly typed declaration.
 
             Debug.Assert(typeSyntax is not ScopedTypeSyntax);
-            TypeWithAnnotations declType = BindTypeOrVarKeyword(typeSyntax.SkipScoped(out _).SkipRef(), diagnostics, out isVar, out alias);
+            TypeWithAnnotations declType = BindTypeOrVarKeyword(typeSyntax.SkipScoped(out _).SkipRef(), diagnostics, out isVar, out alias, allowInferredTypes);
             Debug.Assert(declType.HasType || isVar);
 
             if (isVar)
