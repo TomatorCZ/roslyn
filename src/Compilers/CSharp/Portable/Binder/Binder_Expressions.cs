@@ -3378,7 +3378,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             //
             // SPEC ends
 
-            var type = (ArrayTypeSymbol)BindArrayType(node.Type, diagnostics, permitDimensions: true, basesBeingResolved: null, disallowRestrictedTypes: true).Type;
+            var type = (ArrayTypeSymbol)BindArrayType(node.Type, diagnostics, permitDimensions: true, basesBeingResolved: null, disallowRestrictedTypes: true, allowInferredTypes: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation)).Type;
 
             // CONSIDER: 
             //
@@ -4488,7 +4488,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             BoundExpression bindObjectCreationExpression(ObjectCreationExpressionSyntax node, BindingDiagnosticBag diagnostics)
             {
-                var typeWithAnnotations = BindType(node.Type, diagnostics);
+                var typeWithAnnotations = BindType(node.Type, diagnostics, allowInferredTypes: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation));
                 var type = typeWithAnnotations.Type;
                 var originalType = type;
 
