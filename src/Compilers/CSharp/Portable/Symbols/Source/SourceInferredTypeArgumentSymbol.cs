@@ -17,7 +17,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Source
     [DebuggerDisplay("{GetDebuggerDisplay(),nq}")]
     internal sealed class SourceInferredTypeArgumentSymbol : TypeSymbol
     {
-        // Make type variable
+        public SyntaxNode Syntax { get; }
+        public SourceInferredTypeArgumentSymbol(SyntaxNode syntax) 
+        { 
+            Syntax = syntax;
+        }
 
         public override bool IsReferenceType => throw ExceptionUtilities.Unreachable();
 
@@ -35,7 +39,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Source
 
         public override ImmutableArray<Location> Locations => throw ExceptionUtilities.Unreachable();
 
-        public override ImmutableArray<SyntaxReference> DeclaringSyntaxReferences => throw ExceptionUtilities.Unreachable();
+        public override ImmutableArray<SyntaxReference> DeclaringSyntaxReferences => (new SyntaxReference[] { Syntax.GetReference() }).AsImmutable();
 
         public override Accessibility DeclaredAccessibility => throw ExceptionUtilities.Unreachable();
 

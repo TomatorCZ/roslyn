@@ -13,6 +13,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.CodeAnalysis.Collections;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Symbols.Source;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
@@ -6235,6 +6236,42 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private delegate (MethodSymbol? method, bool returnNotNull) ArgumentsCompletionDelegate(ImmutableArray<VisitArgumentResult> argumentResults, ImmutableArray<ParameterSymbol> parametersOpt, MethodSymbol? method);
 
+        private ImmutableArray<TypeWithAnnotations> getTypeArguments(BoundNode node)
+        {
+            NameSyntax nameStx;
+            if (node.Syntax is InvocationExpressionSyntax { } stx1)
+            {
+                nameStx = Binder.GetNameSyntax(stx1.Expression, out _);
+
+            }
+            else if (node.Syntax is ObjectCreationExpressionSyntax { } stx2)
+            {
+                nameStx = Binder.GetNameSyntax(stx2.Type, out _);
+            }
+            else
+            {
+                return ImmutableArray<TypeWithAnnotations>.Empty;
+            }
+
+            if (nameStx.GetUnqualifiedName() is not GenericNameSyntax { } gen)
+            {
+                return ImmutableArray<TypeWithAnnotations>.Empty;
+            }
+
+            return gen.TypeArgumentList.Arguments.SelectAsArray(x => _binder.BindType(x, BindingDiagnosticBag.GetInstance(), allowInferredTypes: true));
+        }
+
+        private bool IsInferredType(TypeWithAnnotations type)
+        {
+            if (type.TypeKind == TypeKindInternal.InferredType)
+                return true;
+
+            if (type.Type is NamedTypeSymbol { } symbol)
+                return symbol.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType);
+
+            return false;
+        }
+
         private (MethodSymbol? method, ImmutableArray<VisitArgumentResult> results, bool returnNotNull, ArgumentsCompletionDelegate? completion)
         VisitArguments(
             BoundNode node,
@@ -6287,9 +6324,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // Re-infer method type parameters
                 if (method?.IsGenericMethod == true)
                 {
-                    if (HasImplicitTypeArguments(node))
+                    ImmutableArray<TypeWithAnnotations> argList = getTypeArguments(node);
+                    if (HasImplicitTypeArguments(node) || argList.Any(IsInferredType))
                     {
-                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded);
+                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded, getTypeArguments(node));
                         parametersOpt = method.Parameters;
                     }
                     if (ConstraintsHelper.RequiresChecking(method))
@@ -6334,17 +6372,20 @@ namespace Microsoft.CodeAnalysis.CSharp
                         var previousDisableDiagnostics = _disableDiagnostics;
                         _disableDiagnostics |= node.HasErrors || defaultArguments[i];
 
-                        VisitArgumentConversionAndInboundAssignmentsAndPreConditions(
-                            GetConversionIfApplicable(argument, argumentNoConversion),
-                            argumentNoConversion,
-                            conversions.IsDefault || i >= conversions.Length ? Conversion.Identity : conversions[i],
-                            GetRefKind(refKindsOpt, i),
-                            parameter,
-                            parameterType,
-                            parameterAnnotations,
-                            results[i],
-                            conversionResultsBuilder,
-                            invokedAsExtensionMethod && i == 0);
+                        if (!IsInferredType(parameter.TypeWithAnnotations))
+                        {
+                            VisitArgumentConversionAndInboundAssignmentsAndPreConditions(
+                                GetConversionIfApplicable(argument, argumentNoConversion),
+                                argumentNoConversion,
+                                conversions.IsDefault || i >= conversions.Length ? Conversion.Identity : conversions[i],
+                                GetRefKind(refKindsOpt, i),
+                                parameter,
+                                parameterType,
+                                parameterAnnotations,
+                                results[i],
+                                conversionResultsBuilder,
+                                invokedAsExtensionMethod && i == 0);
+                        }
 
                         _disableDiagnostics = previousDisableDiagnostics;
 
@@ -7093,12 +7134,31 @@ namespace Microsoft.CodeAnalysis.CSharp
             return (parameter, type, GetParameterAnnotations(parameter), isExpandedParamsArgument: false);
         }
 
+        ImmutableArray<SourceInferredTypeArgumentSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList)
+        {
+            var inferredArguments = ArrayBuilder<SourceInferredTypeArgumentSymbol>.GetInstance();
+            for (int i = 0; i < typeArgumentList.Length; i++)
+                SeekTypeVars(inferredArguments, typeArgumentList[i]);
+            return inferredArguments.ToImmutableAndFree();
+        }
+
+        void SeekTypeVars(ArrayBuilder<SourceInferredTypeArgumentSymbol> inferredArguments, TypeWithAnnotations type)
+        {
+            if (type.TypeKind == TypeKindInternal.InferredType)
+                inferredArguments.Add((SourceInferredTypeArgumentSymbol)type.Type);
+
+            if (type.Type is NamedTypeSymbol { } symbol)
+                foreach (var item in symbol.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics)
+                    SeekTypeVars(inferredArguments, item);
+        }
+
         private MethodSymbol InferMethodTypeArguments(
             MethodSymbol method,
             ImmutableArray<BoundExpression> arguments,
             ImmutableArray<RefKind> argumentRefKindsOpt,
             ImmutableArray<int> argsToParamsOpt,
-            bool expanded)
+            bool expanded,
+            ImmutableArray<TypeWithAnnotations> typeArguments = default)
         {
             Debug.Assert(method.IsGenericMethod);
 
@@ -7130,7 +7190,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             refKinds.Free();
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
-            var result = MethodTypeInferrer.Infer(
+            var result = TypeInferrer.InferMethod(
                 _binder,
                 _conversions,
                 definition.TypeParameters,
@@ -7139,7 +7199,20 @@ namespace Microsoft.CodeAnalysis.CSharp
                 parameterRefKinds,
                 arguments,
                 ref discardedUseSiteInfo,
-                new MethodInferenceExtensions(this));
+                GetInferredSymbols(typeArguments),
+                typeArguments,
+                extensions: new InferenceExtensions(this)
+            );
+            //var result = MethodTypeInferrer.Infer(
+            //    _binder,
+            //    _conversions,
+            //    definition.TypeParameters,
+            //    definition.ContainingType,
+            //    parameterTypes,
+            //    parameterRefKinds,
+            //    arguments,
+            //    ref discardedUseSiteInfo,
+            //    new MethodInferenceExtensions(this));
 
             if (!result.Success)
             {
@@ -7149,11 +7222,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             return definition.Construct(result.InferredTypeArguments);
         }
 
-        private sealed class MethodInferenceExtensions : MethodTypeInferrer.Extensions
+        private sealed class InferenceExtensions : TypeInferrer.Extensions
         {
             private readonly NullableWalker _walker;
 
-            internal MethodInferenceExtensions(NullableWalker walker)
+            internal InferenceExtensions(NullableWalker walker)
             {
                 _walker = walker;
             }

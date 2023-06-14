@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.CSharp.Symbols.Source;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
@@ -116,6 +117,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     break;
                 case SymbolKind.ErrorType:
                     return ((ErrorTypeSymbol)previous).Substitute(this);
+                case SymbolKindInternal.InferredType:
+                    return SubstituteInferredTypeArgument((SourceInferredTypeArgumentSymbol)previous);
                 default:
                     result = previous;
                     break;
@@ -178,6 +181,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         protected virtual TypeWithAnnotations SubstituteTypeParameter(TypeParameterSymbol typeParameter)
         {
             return TypeWithAnnotations.Create(typeParameter);
+        }
+
+        protected virtual TypeWithAnnotations SubstituteInferredTypeArgument(SourceInferredTypeArgumentSymbol typeArgument)
+        {
+            return TypeWithAnnotations.Create(typeArgument);
         }
 
         private ArrayTypeSymbol SubstituteArrayType(ArrayTypeSymbol t)

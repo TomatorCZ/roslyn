@@ -2,31 +2,34 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#nullable disable
-
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.CSharp.Symbols.Source;
+using Roslyn.Utilities;
+using System.Diagnostics;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
 {
     [DebuggerDisplay("{GetDebuggerDisplay(), nq}")]
-    internal abstract class AbstractTypeParameterMap : AbstractTypeMap
+    internal class TypeVarMap : AbstractTypeMap
     {
-        public readonly SmallDictionary<TypeParameterSymbol, TypeWithAnnotations> Mapping;
+        protected readonly SmallDictionary<TypeSymbol, TypeWithAnnotations> Mapping;
 
-        protected AbstractTypeParameterMap(SmallDictionary<TypeParameterSymbol, TypeWithAnnotations> mapping)
+        private TypeVarMap(SmallDictionary<TypeSymbol, TypeWithAnnotations> mapping)
         {
-            this.Mapping = mapping;
+            Mapping = mapping;
+        }
+
+        internal TypeVarMap() : this(new SmallDictionary<TypeSymbol, TypeWithAnnotations>(ReferenceEqualityComparer.Instance)) { }
+
+        internal void Add(TypeSymbol key, TypeWithAnnotations value)
+        {
+            Mapping.Add(key, value);
         }
 
         protected sealed override TypeWithAnnotations SubstituteTypeParameter(TypeParameterSymbol typeParameter)
         {
-            // It might need to be substituted directly.
             TypeWithAnnotations result;
             if (Mapping.TryGetValue(typeParameter, out result))
             {
@@ -34,6 +37,17 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             }
 
             return TypeWithAnnotations.Create(typeParameter);
+        }
+
+        protected override TypeWithAnnotations SubstituteInferredTypeArgument(SourceInferredTypeArgumentSymbol typeArgument)
+        {
+            TypeWithAnnotations result;
+            if (Mapping.TryGetValue(typeArgument, out result))
+            {
+                return result;
+            }
+
+            return TypeWithAnnotations.Create(typeArgument);
         }
 
         private string GetDebuggerDisplay()

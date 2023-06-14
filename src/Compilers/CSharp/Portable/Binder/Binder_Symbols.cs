@@ -2267,7 +2267,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 if (allowInferredTypes && result.Kind == LookupResultKind.Empty && simpleName == "_") 
                 {
-                    return new SourceInferredTypeArgumentSymbol();
+                    return new SourceInferredTypeArgumentSymbol(where);
                 }
 
                 // Below here is the error case; no viable symbols found (but maybe one or more non-viable.)

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
@@ -1204,6 +1205,343 @@ public class Test
             var authorResult = (IdentifierNameSyntax)tree.GetRoot().DescendantTokens().Last(t => t.Text == "authorResult").Parent;
             var authorResultType = model.GetTypeInfo(authorResult).Type;
             Assert.Equal("Author", authorResultType.Name);
+        }
+        [Fact]
+        [Fact]
+        public void MethodTypeHints_Simple()
+        {
+            var source = """
+    using System;
+
+    public class Program
+    {
+        public static void M1()
+        {
+            GH.F1<int, _>("hi"); // GH.F1<int, string>(string)
+            GH.F2<_, _>(1, 1); //  GH.F2<int, int>(int, int)
+            GH.F2<_>(1,1); // GH.F2<int>(int,int)
+            GH.F2(1,1); // GH.F2<int>(int,int)
+            GH.F3<int, _, string, _>(new GC2<byte, short>()); // GH.F3<int, byte, string, short>(GC2<byte, short>)
+            GH.F4<_, _, string>(intVal => intVal + 1, x => x.ToString(),str => str.Length); // // GH.F4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
+            GH.F5((byte)1); // GH.F5<byte>(byte)
+            GH.F5(1); // GH.F5(int)
+            GH.F6<_>(1, new GC1<byte>()); // GH.F6<byte>(int p1, params GC1[] args)
+            GH.F6<_>(1, new GC1<byte>(), new GC1<byte>()); // GH.F6<byte>(int p1, params GC1[] args)
+        }
+
+        public static void M2() 
+        {
+            B1<int, _>("hi"); // B1<int, string>(string)
+            B3<int, _, string, _>(new GC2<byte, short>()); // B3<int, byte, string, short>(GC2<byte, short>)
+            B4<_, _, string>(intVal => intVal + 1, x => x.ToString(),str => str.Length); // B4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
+
+            void B1<T1, T2>(T2 p2) {}
+
+            //Local functions don't have overloading
+
+            void B3<T1, T2, T3, T4>(GC2<T2, T4> p24) {}
+
+            void B4<T1, T2, T3>(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) {}
+
+            //Local functions don't have overloading
+        }
+    }
+
+        public class GC2<T1, T2> {}
+        public class GC1<T1> {}
+
+        public class GH
+        {
+            public static void F1<T1, T2>(T2 p2) { }
+
+            public static void F2<T1>(T1 p1, int p2) { }
+            public static void F2<T1, T2>(T1 p1, T2 p2) { }
+
+            public static void F3<T1, T2, T3, T4>(GC2<T2, T4> p24) { }
+
+            public static void F4<T1, T2, T3>(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { }
+
+            public static void F5<T1>(T1 p1) {}
+            public static void F5(int p1) {}
+
+            public static void F6<T>(int p1, params GC1<T>[] args) {}
+        }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                    .RegularPreview
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                    );
+            compilation.VerifyDiagnostics();
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                    "void GH.F1<System.Int32, System.String>(System.String p2)",
+                    "void GH.F2<System.Int32, System.Int32>(System.Int32 p1, System.Int32 p2)",
+                    "void GH.F2<System.Int32>(System.Int32 p1, System.Int32 p2)",
+                    "void GH.F2<System.Int32>(System.Int32 p1, System.Int32 p2)",
+                    "void GH.F3<System.Int32, System.Byte, System.String, System.Int16>(GC2<System.Byte, System.Int16> p24)",
+                    "void GH.F4<System.Int32, System.Int32, System.String>(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                    "System.String System.Int32.ToString()",
+                    "void GH.F5<System.Byte>(System.Byte p1)",
+                    "void GH.F5(System.Int32 p1)",
+                    "void GH.F6<System.Byte>(System.Int32 p1, params GC1<System.Byte>[] args)",
+                    "void GH.F6<System.Byte>(System.Int32 p1, params GC1<System.Byte>[] args)",
+                    "void B1<System.Int32, System.String>(System.String p2)",
+                    "void B3<System.Int32, System.Byte, System.String, System.Int16>(GC2<System.Byte, System.Int16> p24)",
+                    "void B4<System.Int32, System.Int32, System.String>(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                    "System.String System.Int32.ToString()"
+                };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
+
+        private static void CheckCallSites(SemanticModel model, InvocationExpressionSyntax[] invocations, string[] callsites)
+        {
+            Assert.True(invocations.Length == callsites.Length);
+            for (int i = 0; i < invocations.Length; i++)
+                CheckCallSite(model, invocations[i], callsites[i]);
+        }
+
+        private static void CheckCallSite(SemanticModel model, InvocationExpressionSyntax invocation, string callsite)
+        {
+            Assert.Null(model.GetDeclaredSymbol(invocation));
+            Assert.NotNull(model.GetTypeInfo(invocation).Type);
+            var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
+            var text = symbol.ToTestDisplayString(includeNonNullable: true);
+            Assert.NotNull(symbol);
+            Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
+        }
+
+        private static void CheckCallSites(SemanticModel model, ObjectCreationExpressionSyntax[] invocations, string[] callsites)
+        {
+            Assert.True(invocations.Length == callsites.Length);
+            for (int i = 0; i < invocations.Length; i++)
+                CheckCallSite(model, invocations[i], callsites[i]);
+        }
+
+        private static void CheckCallSite(SemanticModel model, ObjectCreationExpressionSyntax invocation, string callsite)
+        {
+            Assert.Null(model.GetDeclaredSymbol(invocation));
+            Assert.NotNull(model.GetTypeInfo(invocation).Type);
+            var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
+            Assert.NotNull(symbol);
+            Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
+        }
+
+        [Fact]
+        public void MethodTypeHints_Nested()
+        {
+            var source = """
+    public class Program
+    {
+        public static void M1()
+        {
+            B1<int> temp = new B1<int>();
+            B2<int, string> temp2 = new B2<int, string>();
+            C2<int, B> temp3 = new C2<int, B>();
+
+            F1<A1<_>>(temp); // F1<A1<int>>(A1<int>)
+            F1<A2<_, string>>(temp2); // F1<A2<int, string>>
+            F1<I2<_, A>>(temp3); // F1<I2<int, A>>(I2<int, A>)
+        } 
+
+        public static void F1<T1>(T1 p1) {}
+    }
+
+    public class A {}
+    public class B : A{}
+    public class A1<T> {}
+    public class A2<T1, T2> {}
+    public class B1<T> : A1<T> {}
+    public class B2<T1, T2> : A2<T1, T2> {}
+    public interface I2<in T1, out T2> {}
+    public class C2<T1, T2> : I2<T1, T2> {}
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                    .RegularPreview
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                    );
+            compilation.VerifyDiagnostics();
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                    "void Program.F1<A1<System.Int32>>(A1<System.Int32> p1)",
+                    "void Program.F1<A2<System.Int32, System.String>>(A2<System.Int32, System.String> p1)",
+                    "void Program.F1<I2<System.Int32, A>>(I2<System.Int32, A> p1)"
+                };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
+
+        [Fact]
+        public void MethodTypeHints_Nullability()
+        {
+            var source = """
+    #nullable enable
+
+    public class Program
+    {
+        public static void M1()
+        {
+            string? temp1 = null;
+            string temp2 = "";
+            C2<int, string> temp3 = new C2<int, string>();
+            C2<int, string?> temp4 = new C2<int, string?>();
+
+            F1<int, _>(temp1); // F1<int, string>(string?)
+            F1<int, _>(temp2); // F1<int, string>(string?)
+            F1<int?, _>(temp1); // F1<int, string>(string?)
+            F1<int?, _>(temp2); // F1<int, string>(string?)
+            F2<int, _>(temp1); // F2<int, string?>(string?)
+            F2<int, _>(temp2); // F2<int, string>(string)
+            F2<int?, _>(temp1); // F2<int, string?>(string?)
+            F2<int?, _>(temp2); // F2<int?, string>(string)
+
+
+            F<I2<_, string?>>(temp3); // F<I2<int, string?>>(C2<int, string?>)
+            F<C2<_, string?>>(temp3); // Error: Can't infer
+            F<I2<_, _>>(temp3); // F<I2<int, string!>>(C2<int, string!>)
+            F<C2<_, _>>(temp3); // F<C2<int, string!>>(C2<int, string!>)
+            F<I2<_, _>>(temp4); // F<I2<int, string?>>(C2<int, string?>)
+            F<C2<_, _>>(temp4); // F<C2<int, string?>>(C2<int, string?>)
+            F<I2<_, string>>(temp4); // Error: Can't infer
+            F<C2<_, string>>(temp4); // Error: Can't infer
+        } 
+
+        public static void F1<T1, T2>(T2? p2) { }
+        public static void F2<T1, T2>(T2 p2) { }
+        public static void F<T1>(T1 p1) {}
+        public static void F<T1>(T1 p1, T1 p2) {}
+    }
+
+    public class A {}
+    public interface I2<in T1, out T2> {}
+    public class C2<T1, T2> : I2<T1, T2> {}
+    """;
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                    .RegularPreview
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                    );
+            compilation.VerifyDiagnostics(new[] {
+                // (23,27): warning CS8620: Argument of type 'C2<int, string>' cannot be used for parameter 'p1' of type 'C2<int, string?>' in 'void Program.F<C2<int, string?>>(C2<int, string?> p1)' due to differences in the nullability of reference types.
+                //         F<C2<_, string?>>(temp3); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp3").WithArguments("C2<int, string>", "C2<int, string?>", "p1", "void Program.F<C2<int, string?>>(C2<int, string?> p1)").WithLocation(23, 27),
+                // (28,26): warning CS8620: Argument of type 'C2<int, string?>' cannot be used for parameter 'p1' of type 'I2<int, string>' in 'void Program.F<I2<int, string>>(I2<int, string> p1)' due to differences in the nullability of reference types.
+                //         F<I2<_, string>>(temp4); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp4").WithArguments("C2<int, string?>", "I2<int, string>", "p1", "void Program.F<I2<int, string>>(I2<int, string> p1)").WithLocation(28, 26),
+                // (29,26): warning CS8620: Argument of type 'C2<int, string?>' cannot be used for parameter 'p1' of type 'C2<int, string>' in 'void Program.F<C2<int, string>>(C2<int, string> p1)' due to differences in the nullability of reference types.
+                //         F<C2<_, string>>(temp4); // Error: Can't infer
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp4").WithArguments("C2<int, string?>", "C2<int, string>", "p1", "void Program.F<C2<int, string>>(C2<int, string> p1)").WithLocation(29, 26)
+            });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                    "void Program.F1<System.Int32, System.String!>(System.String? p2)",
+                    "void Program.F1<System.Int32, System.String!>(System.String? p2)",
+                    "void Program.F1<System.Int32?, System.String!>(System.String? p2)",
+                    "void Program.F1<System.Int32?, System.String!>(System.String? p2)",
+                    "void Program.F2<System.Int32, System.String?>(System.String? p2)",
+                    "void Program.F2<System.Int32, System.String!>(System.String! p2)",
+                    "void Program.F2<System.Int32?, System.String?>(System.String? p2)",
+                    "void Program.F2<System.Int32?, System.String!>(System.String! p2)",
+                    "void Program.F<I2<System.Int32, System.String?>!>(I2<System.Int32, System.String?>! p1)",
+                    "void Program.F<C2<System.Int32, System.String?>!>(C2<System.Int32, System.String?>! p1)",
+                    "void Program.F<I2<System.Int32, System.String!>!>(I2<System.Int32, System.String!>! p1)",
+                    "void Program.F<C2<System.Int32, System.String!>!>(C2<System.Int32, System.String!>! p1)",
+                    "void Program.F<I2<System.Int32, System.String?>!>(I2<System.Int32, System.String?>! p1)",
+                    "void Program.F<C2<System.Int32, System.String?>!>(C2<System.Int32, System.String?>! p1)",
+                    "void Program.F<I2<System.Int32, System.String!>!>(I2<System.Int32, System.String!>! p1)",
+                    "void Program.F<C2<System.Int32, System.String!>!>(C2<System.Int32, System.String!>! p1)"
+                };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
+
+        [Fact]
+        public void MethodTypeHints_Dynamic()
+        {
+            var source = """
+    public class Program
+    {
+        public static void M1()
+        {
+            dynamic temp = "";
+            Foo<string,_>("", temp, 1); // Not checked because of dynamic
+            Foo<_, string>(1, temp, 1); // Not checked because of dynamic
+            temp.Foo<string, _>(temp);  // _ is threated as type because we can't do partial type inference
+        }
+
+        public static void Foo<T1, T2>(T1 p1, T2 p2, T1 p3) {}
+    }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                    .RegularPreview
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                    );
+            compilation.VerifyDiagnostics( new[] {
+                // (8,26): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         temp.Foo<string, _>(temp); 
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(8, 26)
+            });
+        }
+
+        [Fact]
+        public void MethodTypeHints_NotInferredRecovery()
+        {
+            var source = """
+    #nullable enable
+
+    public class Program 
+    {
+        public void M() 
+        {
+            GH.F1<_,_>(""); // Error: can't infer T1
+            GH.F1<_,int>(""); // Error: T2 == int
+            GH.F1<_,byte>(257); // Error: T2 = byte
+        }
+    }
+
+    public class GH
+    {
+        public static void F1<T1, T2>(T2 p2) { }
+    }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                    .RegularPreview
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                    .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                    );
+            compilation.VerifyDiagnostics(new[] {
+                // (7,12): error CS0411: The type arguments for method 'GH.F1<T1, T2>(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         GH.F1<_,_>(""); // Error: can't infer T1
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(7, 12),
+                // (8,12): error CS0411: The type arguments for method 'GH.F1<T1, T2>(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         GH.F1<_,int>(""); // Error: T2 == int
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,int>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(8, 12),
+                // (9,12): error CS0411: The type arguments for method 'GH.F1<T1, T2>(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         GH.F1<_,byte>(257); // Error: T2 = byte
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,byte>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(9, 12)
+            });
         }
     }
 }
