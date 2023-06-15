@@ -236,7 +236,7 @@ namespace Microsoft.CodeAnalysis.CSharp
            ImmutableArray<TypeParameterSymbol> typeParameters,
            ImmutableArray<TypeWithAnnotations> typeArguments)
         {
-            if (typeArguments.IsDefault)
+            if (typeArguments.IsDefault || typeArguments.Length == 0)
                 return;
 
             targets.AddRange(typeParameters.Select(x => TypeWithAnnotations.Create(x)));
@@ -254,7 +254,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             bool isRef) 
         {
             targets.Add(target);
-            sources.Add(new BoundTypeExpression(default, null, source));
+            sources.Add(new BoundTypeExpression(source.Type.GetNonNullSyntaxNode(), null, source));
             bounds.Add((isRef || source.Type.IsPointerType())
                     ? ExactOrShapeOrBoundsKind.Exact
                     : ExactOrShapeOrBoundsKind.UpperBound);
@@ -356,7 +356,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             AddArguments(targets, sources, boundKinds, formalParameterTypes, arguments, formalParameterRefKinds);
             AddTypeArguments(targets, sources, boundKinds, typeParameters, typeArguments);
-            if (!targetContraint.source.IsDefault && !targetContraint.target.IsDefault)
+            if (targetContraint.source.Type is not null && targetContraint.target.Type is not null)
                 AddTarget(targets, sources, boundKinds, targetContraint.source, targetContraint.target, targetContraint.isRef);
 
             if (useTypeParametersConstrains)
@@ -660,7 +660,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 DoFurtherInference(addedBound, _exactBounds[varIndex], (kind == ExactOrShapeOrBoundsKind.Shape) ? ExactOrShapeOrBoundsKind.Exact : kind, ref useSiteInfo);
                 DoFurtherInference(addedBound, _lowerBounds[varIndex], ExactOrShapeOrBoundsKind.LowerBound, ref useSiteInfo);
                 DoFurtherInference(addedBound, _upperBounds[varIndex], ExactOrShapeOrBoundsKind.UpperBound, ref useSiteInfo);
-                if (kind != ExactOrShapeOrBoundsKind.Shape)
+                if (kind != ExactOrShapeOrBoundsKind.Shape && DependsOnAny(varIndex, DependencyKind.Shape))
                     DoFurtherInferenceShape(_typeVariableShapes[varIndex], addedBound, kind, ref useSiteInfo);
             }
             

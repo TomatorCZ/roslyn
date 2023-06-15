@@ -183,6 +183,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         EventAssignmentOperator,
         Attribute,
         UnconvertedObjectCreationExpression,
+        UnconvertedInvocationExpression,
         ObjectCreationExpression,
         TupleLiteral,
         ConvertedTupleLiteral,
@@ -6202,6 +6203,57 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
     }
 
+    internal sealed partial class BoundUnconvertedInvocationExpression : BoundExpression
+    {
+        public BoundUnconvertedInvocationExpression(SyntaxNode syntax, bool allowArglist, RefKind refKind, Binder binder, BindingDiagnosticBag diagnostics, bool hasErrors)
+            : base(BoundKind.UnconvertedInvocationExpression, syntax, null, hasErrors)
+        {
+
+            RoslynDebug.Assert(refKind is object, "Field 'refKind' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(diagnostics is object, "Field 'diagnostics' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+
+            this.allowArglist = allowArglist;
+            this.RefKind = refKind;
+            this.Binder = binder;
+            this.Diagnostics = diagnostics;
+        }
+
+        public BoundUnconvertedInvocationExpression(SyntaxNode syntax, bool allowArglist, RefKind refKind, Binder binder, BindingDiagnosticBag diagnostics)
+            : base(BoundKind.UnconvertedInvocationExpression, syntax, null)
+        {
+
+            RoslynDebug.Assert(refKind is object, "Field 'refKind' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(diagnostics is object, "Field 'diagnostics' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+
+            this.allowArglist = allowArglist;
+            this.RefKind = refKind;
+            this.Binder = binder;
+            this.Diagnostics = diagnostics;
+        }
+
+        public new TypeSymbol? Type => base.Type;
+        public bool allowArglist { get; }
+        public RefKind RefKind { get; }
+        public Binder Binder { get; }
+        public BindingDiagnosticBag Diagnostics { get; }
+
+        [DebuggerStepThrough]
+        public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitUnconvertedInvocationExpression(this);
+
+        public BoundUnconvertedInvocationExpression Update(bool allowArglist, RefKind refKind, Binder binder, BindingDiagnosticBag diagnostics)
+        {
+            if (allowArglist != this.allowArglist || refKind != this.RefKind || binder != this.Binder || diagnostics != this.Diagnostics)
+            {
+                var result = new BoundUnconvertedInvocationExpression(this.Syntax, allowArglist, refKind, binder, diagnostics, this.HasErrors);
+                result.CopyAttributes(this);
+                return result;
+            }
+            return this;
+        }
+    }
+
     internal abstract partial class BoundObjectCreationExpressionBase : BoundExpression
     {
         protected BoundObjectCreationExpressionBase(BoundKind kind, SyntaxNode syntax, TypeSymbol type, bool hasErrors)
@@ -8837,6 +8889,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return VisitAttribute((BoundAttribute)node, arg);
                 case BoundKind.UnconvertedObjectCreationExpression:
                     return VisitUnconvertedObjectCreationExpression((BoundUnconvertedObjectCreationExpression)node, arg);
+                case BoundKind.UnconvertedInvocationExpression:
+                    return VisitUnconvertedInvocationExpression((BoundUnconvertedInvocationExpression)node, arg);
                 case BoundKind.ObjectCreationExpression:
                     return VisitObjectCreationExpression((BoundObjectCreationExpression)node, arg);
                 case BoundKind.TupleLiteral:
@@ -9130,6 +9184,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public virtual R VisitEventAssignmentOperator(BoundEventAssignmentOperator node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitAttribute(BoundAttribute node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitUnconvertedObjectCreationExpression(BoundUnconvertedObjectCreationExpression node, A arg) => this.DefaultVisit(node, arg);
+        public virtual R VisitUnconvertedInvocationExpression(BoundUnconvertedInvocationExpression node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitObjectCreationExpression(BoundObjectCreationExpression node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitTupleLiteral(BoundTupleLiteral node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitConvertedTupleLiteral(BoundConvertedTupleLiteral node, A arg) => this.DefaultVisit(node, arg);
@@ -9358,6 +9413,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public virtual BoundNode? VisitEventAssignmentOperator(BoundEventAssignmentOperator node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitAttribute(BoundAttribute node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitUnconvertedObjectCreationExpression(BoundUnconvertedObjectCreationExpression node) => this.DefaultVisit(node);
+        public virtual BoundNode? VisitUnconvertedInvocationExpression(BoundUnconvertedInvocationExpression node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitTupleLiteral(BoundTupleLiteral node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitConvertedTupleLiteral(BoundConvertedTupleLiteral node) => this.DefaultVisit(node);
@@ -10121,6 +10177,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             this.VisitList(node.Arguments);
             return null;
         }
+        public override BoundNode? VisitUnconvertedInvocationExpression(BoundUnconvertedInvocationExpression node) => null;
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
             this.VisitList(node.Arguments);
@@ -11365,6 +11422,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<BoundExpression> arguments = this.VisitList(node.Arguments);
             TypeSymbol? type = this.VisitType(node.Type);
             return node.Update(arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.InitializerOpt, node.Binder);
+        }
+        public override BoundNode? VisitUnconvertedInvocationExpression(BoundUnconvertedInvocationExpression node)
+        {
+            TypeSymbol? type = this.VisitType(node.Type);
+            return node.Update(node.allowArglist, node.RefKind, node.Binder, node.Diagnostics);
         }
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
@@ -13530,6 +13592,18 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 updatedNode = node.Update(arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.InitializerOpt, node.Binder);
             }
+            return updatedNode;
+        }
+
+        public override BoundNode? VisitUnconvertedInvocationExpression(BoundUnconvertedInvocationExpression node)
+        {
+            if (!_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
+            {
+                return node;
+            }
+
+            BoundUnconvertedInvocationExpression updatedNode = node.Update(node.allowArglist, node.RefKind, node.Binder, node.Diagnostics);
+            updatedNode.TopLevelNullability = infoAndType.Info;
             return updatedNode;
         }
 
@@ -15873,6 +15947,17 @@ namespace Microsoft.CodeAnalysis.CSharp
             new TreeDumperNode("argumentRefKindsOpt", node.ArgumentRefKindsOpt, null),
             new TreeDumperNode("initializerOpt", node.InitializerOpt, null),
             new TreeDumperNode("binder", node.Binder, null),
+            new TreeDumperNode("type", node.Type, null),
+            new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
+            new TreeDumperNode("hasErrors", node.HasErrors, null)
+        }
+        );
+        public override TreeDumperNode VisitUnconvertedInvocationExpression(BoundUnconvertedInvocationExpression node, object? arg) => new TreeDumperNode("unconvertedInvocationExpression", null, new TreeDumperNode[]
+        {
+            new TreeDumperNode("allowArglist", node.allowArglist, null),
+            new TreeDumperNode("refKind", node.RefKind, null),
+            new TreeDumperNode("binder", node.Binder, null),
+            new TreeDumperNode("diagnostics", node.Diagnostics, null),
             new TreeDumperNode("type", node.Type, null),
             new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
             new TreeDumperNode("hasErrors", node.HasErrors, null)

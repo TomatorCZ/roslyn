@@ -65,5 +65,6 @@ namespace Microsoft.CodeAnalysis.CSharp
         ObjectCreation, // a conversion from a `new()` expression to any type
 
         InterpolatedStringHandler, // A conversion from an interpolated string literal to a type attributed with InterpolatedStringBuilderAttribute
+        TargetTypedMethod,
     }
 }

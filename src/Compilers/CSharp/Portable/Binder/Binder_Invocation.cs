@@ -158,7 +158,8 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// </summary>
         private BoundExpression BindInvocationExpression(
             InvocationExpressionSyntax node,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            TypeSymbol destType = null)
         {
             BoundExpression result;
             if (TryBindNameofOperator(node, diagnostics, out result))
@@ -222,7 +223,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 boundExpression = CheckValue(boundExpression, BindValueKind.RValueOrMethodGroup, diagnostics);
                 string name = boundExpression.Kind == BoundKind.MethodGroup ? GetName(node.Expression) : null;
                 BindArgumentsAndNames(node.ArgumentList, diagnostics, analyzedArguments, allowArglist: true);
-                return BindInvocationExpression(node, node.Expression, name, boundExpression, analyzedArguments, diagnostics);
+                return BindInvocationExpression(node, node.Expression, name, boundExpression, analyzedArguments, diagnostics, destType: destType);
             }
 
             static bool receiverIsInvocation(InvocationExpressionSyntax node, out InvocationExpressionSyntax nested)
@@ -302,7 +303,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             AnalyzedArguments analyzedArguments,
             BindingDiagnosticBag diagnostics,
             CSharpSyntaxNode queryClause = null,
-            bool allowUnexpandedForm = true)
+            bool allowUnexpandedForm = true,
+            TypeSymbol destType = null)
         {
             BoundExpression result;
             NamedTypeSymbol delegateType;
@@ -320,7 +322,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 ReportSuppressionIfNeeded(boundExpression, diagnostics);
                 result = BindMethodGroupInvocation(
                     node, expression, methodName, (BoundMethodGroup)boundExpression, analyzedArguments,
-                    diagnostics, queryClause, allowUnexpandedForm: allowUnexpandedForm, anyApplicableCandidates: out _);
+                    diagnostics, queryClause, allowUnexpandedForm: allowUnexpandedForm, anyApplicableCandidates: out _, destType: destType);
             }
             else if ((object)(delegateType = GetDelegateType(boundExpression)) != null)
             {
@@ -621,13 +623,14 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             CSharpSyntaxNode queryClause,
             bool allowUnexpandedForm,
-            out bool anyApplicableCandidates)
+            out bool anyApplicableCandidates,
+            TypeSymbol destType = null)
         {
             BoundExpression result;
             CompoundUseSiteInfo<AssemblySymbol> useSiteInfo = GetNewCompoundUseSiteInfo(diagnostics);
             var resolution = this.ResolveMethodGroup(
                 methodGroup, expression, methodName, analyzedArguments, isMethodGroupConversion: false,
-                useSiteInfo: ref useSiteInfo, allowUnexpandedForm: allowUnexpandedForm);
+                useSiteInfo: ref useSiteInfo, allowUnexpandedForm: allowUnexpandedForm, returnType: destType);
             diagnostics.Add(expression, useSiteInfo);
             anyApplicableCandidates = resolution.ResultKind == LookupResultKind.Viable && resolution.OverloadResolutionResult.HasAnyApplicableMember;
 

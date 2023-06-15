@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Linq;
 using Microsoft.Cci;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp.Symbols.Source;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Collections;
@@ -277,7 +278,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     containingTypeMapOpt,
                     inferWithDynamic: inferWithDynamic,
                     useSiteInfo: ref useSiteInfo,
-                    allowUnexpandedForm: allowUnexpandedForm);
+                    allowUnexpandedForm: allowUnexpandedForm,
+                    returnType: returnType);
             }
 
             // CONSIDER: use containingTypeMapOpt for RemoveLessDerivedMembers?
@@ -825,7 +827,8 @@ outerDefault:
             Dictionary<NamedTypeSymbol, ArrayBuilder<TMember>> containingTypeMapOpt,
             bool inferWithDynamic,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
-            bool allowUnexpandedForm)
+            bool allowUnexpandedForm,
+            TypeSymbol returnType = null)
             where TMember : Symbol
         {
             // SPEC VIOLATION:
@@ -938,7 +941,8 @@ outerDefault:
                     allowRefOmittedArguments: allowRefOmittedArguments,
                     inferWithDynamic: inferWithDynamic,
                     completeResults: completeResults,
-                    useSiteInfo: ref useSiteInfo)
+                    useSiteInfo: ref useSiteInfo,
+                    returnType: returnType)
                 : default(MemberResolutionResult<TMember>);
 
             var result = normalResult;
@@ -3271,7 +3275,8 @@ outerDefault:
             bool allowRefOmittedArguments,
             bool inferWithDynamic,
             bool completeResults,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            TypeSymbol returnType = null)
             where TMember : Symbol
         {
             // AnalyzeArguments matches arguments to parameter names and positions. 
@@ -3334,7 +3339,8 @@ outerDefault:
                 hasAnyRefOmittedArgument: hasAnyRefOmittedArgument,
                 inferWithDynamic: inferWithDynamic,
                 completeResults: completeResults,
-                useSiteInfo: ref useSiteInfo);
+                useSiteInfo: ref useSiteInfo,
+                returnType: returnType);
 
             // If we were producing complete results and had missing arguments, we pushed on in order to call IsApplicable for
             // type inference and lambda binding. In that case we still need to return the argument mismatch failure here.
@@ -3423,11 +3429,15 @@ outerDefault:
             return false;
         }
 
-        ImmutableArray<SourceInferredTypeArgumentSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList)
+        ImmutableArray<SourceInferredTypeArgumentSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList, TypeWithAnnotations returnType = default)
         {
             var inferredArguments = ArrayBuilder<SourceInferredTypeArgumentSymbol>.GetInstance();
             for (int i = 0; i < typeArgumentList.Length; i++)
                 SeekTypeVars(inferredArguments, typeArgumentList[i]);
+
+            if (returnType.Type is not null)
+                SeekTypeVars(inferredArguments, returnType);
+
             return inferredArguments.ToImmutableAndFree();
         }
 
@@ -3452,7 +3462,8 @@ outerDefault:
             bool hasAnyRefOmittedArgument,
             bool inferWithDynamic,
             bool completeResults,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            TypeSymbol returnType = null)
             where TMember : Symbol
         {
             bool ignoreOpenTypes;
@@ -3474,6 +3485,7 @@ outerDefault:
                     // have no effect on applicability of this candidate.
                     ignoreOpenTypes = true;
                     effectiveParameters = constructedEffectiveParameters;
+                    BindWithTarget(arguments, originalEffectiveParameters.ParameterTypes);
                 }
                 else
                 {
@@ -3489,6 +3501,7 @@ outerDefault:
                     {
                         // infer generic type arguments:
                         MemberAnalysisResult inferenceError;
+                        BindWithTarget(arguments, originalEffectiveParameters.ParameterTypes);
                         typeArguments = InferMethodTypeArguments(method,
                                             leastOverriddenMethod.ConstructedFrom.TypeParameters,
                                             arguments,
@@ -3496,7 +3509,8 @@ outerDefault:
                                             out hasTypeArgumentsInferredFromFunctionType,
                                             out inferenceError,
                                             ref useSiteInfo,
-                                            typeArgumentsBuilder.ToImmutable());
+                                            typeArgumentsBuilder.ToImmutable(),
+                                            returnType);
                         if (typeArguments.IsDefault)
                         {
                             return new MemberResolutionResult<TMember>(member, leastOverriddenMember, inferenceError, hasTypeArgumentInferredFromFunctionType: false);
@@ -3561,6 +3575,7 @@ outerDefault:
             {
                 effectiveParameters = constructedEffectiveParameters;
                 ignoreOpenTypes = false;
+                BindWithTarget(arguments, originalEffectiveParameters.ParameterTypes);
             }
 
             var applicableResult = IsApplicable(
@@ -3574,6 +3589,36 @@ outerDefault:
                 completeResults: completeResults,
                 useSiteInfo: ref useSiteInfo);
             return new MemberResolutionResult<TMember>(member, leastOverriddenMember, applicableResult, hasTypeArgumentsInferredFromFunctionType);
+
+            void BindWithTarget(AnalyzedArguments arguments, ImmutableArray<TypeWithAnnotations> parameterTypes)
+            {
+                var diagnostics = BindingDiagnosticBag.GetInstance();
+                for (int i = 0; i < arguments.Arguments.Count; i++)
+                {
+                    if (arguments.Arguments[i] is BoundUnconvertedInvocationExpression { } expr)
+                    {
+                        Binder.BindValueKind valueKind =
+                            expr.RefKind == RefKind.None ?
+                                    Binder.BindValueKind.RValue :
+                                    expr.RefKind == RefKind.In ?
+                                        Binder.BindValueKind.ReadonlyRef :
+                                        Binder.BindValueKind.RefOrOut;
+
+
+                        bool useRetType = !(IsInferredType(TypeWithAnnotations.Create(parameterTypes[i].Type)) || parameterTypes[i].Type.ContainsMethodTypeParameter());
+                        var type = (expr.allowArglist)
+                            ? expr.Binder.BindValueAllowArgList((ExpressionSyntax)expr.Syntax, diagnostics, valueKind, useRetType ? parameterTypes[i].Type : null)
+                            : expr.Binder.BindValue((ExpressionSyntax)expr.Syntax, diagnostics, valueKind, useRetType ? parameterTypes[i].Type : null);
+
+                        if (!((BoundCall)type).HasErrors) 
+                        {
+                            arguments.Arguments[i] = type;
+                            expr.Diagnostics.AddRange(diagnostics.DiagnosticBag);
+                        }
+                        diagnostics.Clear();
+                    }
+                }
+            }
         }
 
         private ImmutableArray<TypeWithAnnotations> InferMethodTypeArguments(
@@ -3584,7 +3629,8 @@ outerDefault:
             out bool hasTypeArgumentsInferredFromFunctionType,
             out MemberAnalysisResult error,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
-            ImmutableArray<TypeWithAnnotations> typeArgumentHints)
+            ImmutableArray<TypeWithAnnotations> typeArgumentHints,
+            TypeSymbol returnType = null)
         {
             var args = arguments.Arguments.ToImmutable();
 
@@ -3602,8 +3648,9 @@ outerDefault:
                 originalEffectiveParameters.ParameterRefKinds,
                 args,
                 ref useSiteInfo,
-                GetInferredSymbols(typeArgumentHints),
-                typeArgumentHints);
+                GetInferredSymbols(typeArgumentHints, TypeWithAnnotations.Create(returnType)),
+                typeArgumentHints,
+                (TypeWithAnnotations.Create(returnType), method.ReturnTypeWithAnnotations, false));
 
             //var inferenceResult = MethodTypeInferrer.Infer(
             //    _binder,

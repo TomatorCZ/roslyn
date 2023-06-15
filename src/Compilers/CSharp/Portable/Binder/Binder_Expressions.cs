@@ -232,9 +232,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// did not meet the requirements, the return value will be a <see cref="BoundBadExpression"/> that
         /// (typically) wraps the subexpression.
         /// </summary>
-        internal BoundExpression BindValue(ExpressionSyntax node, BindingDiagnosticBag diagnostics, BindValueKind valueKind)
+        internal BoundExpression BindValue(ExpressionSyntax node, BindingDiagnosticBag diagnostics, BindValueKind valueKind, TypeSymbol destType = null)
         {
-            var result = this.BindExpression(node, diagnostics: diagnostics, invoked: false, indexed: false);
+            var result = this.BindExpression(node, diagnostics: diagnostics, invoked: false, indexed: false, destType: destType);
             return CheckValue(result, valueKind, diagnostics);
         }
 
@@ -417,9 +417,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             return GenerateConversionForAssignment(delegateType, expr, diagnostics);
         }
 
-        internal BoundExpression BindValueAllowArgList(ExpressionSyntax node, BindingDiagnosticBag diagnostics, BindValueKind valueKind)
+        internal BoundExpression BindValueAllowArgList(ExpressionSyntax node, BindingDiagnosticBag diagnostics, BindValueKind valueKind, TypeSymbol destType = null)
         {
-            var result = this.BindExpressionAllowArgList(node, diagnostics: diagnostics);
+            var result = this.BindExpressionAllowArgList(node, diagnostics: diagnostics, destType: destType);
             return CheckValue(result, valueKind, diagnostics);
         }
 
@@ -514,9 +514,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             return BindExpression(node, diagnostics: diagnostics, invoked: false, indexed: false);
         }
 
-        protected BoundExpression BindExpression(ExpressionSyntax node, BindingDiagnosticBag diagnostics, bool invoked, bool indexed)
+        protected BoundExpression BindExpression(ExpressionSyntax node, BindingDiagnosticBag diagnostics, bool invoked, bool indexed, TypeSymbol destType = null)
         {
-            BoundExpression expr = BindExpressionInternal(node, diagnostics, invoked, indexed);
+            BoundExpression expr = BindExpressionInternal(node, diagnostics, invoked, indexed, destType);
             CheckContextForPointerTypes(node, diagnostics, expr);
 
             if (expr.Kind == BoundKind.ArgListOperator)
@@ -532,9 +532,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         // PERF: allowArgList is not a parameter because it is fairly uncommon case where arglists are allowed
         //       so we do not want to pass that argument to every BindExpression which is often recursive 
         //       and extra arguments contribute to the stack size.
-        protected BoundExpression BindExpressionAllowArgList(ExpressionSyntax node, BindingDiagnosticBag diagnostics)
+        protected BoundExpression BindExpressionAllowArgList(ExpressionSyntax node, BindingDiagnosticBag diagnostics, TypeSymbol destType = null)
         {
-            BoundExpression expr = BindExpressionInternal(node, diagnostics, invoked: false, indexed: false);
+            BoundExpression expr = BindExpressionInternal(node, diagnostics, invoked: false, indexed: false, destType: destType);
             CheckContextForPointerTypes(node, diagnostics, expr);
             return expr;
         }
@@ -552,7 +552,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        private BoundExpression BindExpressionInternal(ExpressionSyntax node, BindingDiagnosticBag diagnostics, bool invoked, bool indexed)
+        private BoundExpression BindExpressionInternal(ExpressionSyntax node, BindingDiagnosticBag diagnostics, bool invoked, bool indexed, TypeSymbol destType = null)
         {
             if (IsEarlyAttributeBinder && !EarlyWellKnownAttributeBinder.CanBeValidAttributeArgument(node))
             {
@@ -571,7 +571,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case SyntaxKind.BaseExpression:
                     return BindBase((BaseExpressionSyntax)node, diagnostics);
                 case SyntaxKind.InvocationExpression:
-                    return BindInvocationExpression((InvocationExpressionSyntax)node, diagnostics);
+                    return BindInvocationExpression((InvocationExpressionSyntax)node, diagnostics, destType);
                 case SyntaxKind.ArrayInitializerExpression:
                     return BindUnexpectedArrayInitializer((InitializerExpressionSyntax)node, diagnostics, ErrorCode.ERR_ArrayInitInBadPlace);
                 case SyntaxKind.ArrayCreationExpression:
@@ -3198,6 +3198,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                         refKind == RefKind.In ?
                             BindValueKind.ReadonlyRef :
                             BindValueKind.RefOrOut;
+
+            if (argumentExpression is InvocationExpressionSyntax { })
+            {
+                return new BoundUnconvertedInvocationExpression(argumentExpression, allowArglist, refKind, this, diagnostics);
+            }
+
 
             BoundExpression argument;
             if (allowArglist)

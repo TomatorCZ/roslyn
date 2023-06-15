@@ -1808,6 +1808,16 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
+        private bool IsInferredType(TypeWithAnnotations type)
+        {
+            if (type.TypeKind == TypeKindInternal.InferredType)
+                return true;
+
+            if (type.Type is NamedTypeSymbol { } symbol)
+                return symbol.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType);
+
+            return false;
+        }
         private BoundExpression BindPossibleArrayInitializer(
             ExpressionSyntax node,
             TypeSymbol destinationType,
@@ -1818,7 +1828,15 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (node.Kind() != SyntaxKind.ArrayInitializerExpression)
             {
-                return BindValue(node, diagnostics, valueKind);
+                if (IsInferredType(TypeWithAnnotations.Create(destinationType)))
+                {
+                    return BindValue(node, diagnostics, valueKind);
+                }
+                else
+                {
+                    return BindValue(node, diagnostics, valueKind, destType: destinationType);
+                }
+                
             }
 
             BoundExpression result;

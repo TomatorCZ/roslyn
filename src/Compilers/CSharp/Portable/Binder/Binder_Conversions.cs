@@ -208,6 +208,32 @@ namespace Microsoft.CodeAnalysis.CSharp
                         destination);
                 }
 
+                if (conversion.Kind == ConversionKind.TargetTypedMethod)
+                {
+                    var expr = (BoundUnconvertedInvocationExpression)source;
+                    Binder.BindValueKind valueKind =
+                        expr.RefKind == RefKind.None ?
+                                Binder.BindValueKind.RValue :
+                                expr.RefKind == RefKind.In ?
+                                    Binder.BindValueKind.ReadonlyRef :
+                                    Binder.BindValueKind.RefOrOut;
+                    var type = (expr.allowArglist)
+                        ? expr.Binder.BindValueAllowArgList((ExpressionSyntax)expr.Syntax, expr.Diagnostics, valueKind, destination)
+                        : expr.Binder.BindValue((ExpressionSyntax)expr.Syntax, expr.Diagnostics, valueKind, destination);
+
+                    var expr1 = new BoundConversion(
+                      syntax,
+                      type,
+                      type is BoundBadExpression ? Conversion.NoConversion : conversion,
+                      expr.Binder.CheckOverflowAtRuntime,
+                      explicitCastInCode: isCast && !wasCompilerGenerated,
+                      conversionGroupOpt,
+                      expr.ConstantValueOpt,
+                      destination);
+
+                    return expr1;
+                }
+
                 if (source.Kind == BoundKind.UnconvertedSwitchExpression)
                 {
                     TypeSymbol? type = source.Type;

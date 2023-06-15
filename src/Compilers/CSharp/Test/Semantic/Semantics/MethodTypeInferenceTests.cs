@@ -1543,5 +1543,48 @@ public class Test
                 Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,byte>").WithArguments("GH.F1<T1, T2>(T2)").WithLocation(9, 12)
             });
         }
+
+        [Fact]
+        public void MethodTypeHints_Target()
+        {
+            var source = """
+    using System;
+
+    public class Program 
+    {
+        public void M() 
+        {
+            //int temp1 = Foo1(); // Inferred: Foo1<int>()
+            //Bar1(Foo1()); // Inferred: Bar1(Foo1<int>())
+            //B<int> temp2 = Foo2(); // Inferred: Foo2<A<int>>()
+            //G<int, _> temp3 = Foo3<_, int>(); // Can't be inferred Foo3 can't be inferred without target and target doesn't have natural type
+            //Bar3(new(), "");
+            Bar2(Foo1(), (A<int>)null); // Inferred: Bar2<int>(Foo1<int>(), (List<int>)null) 
+        }
+    
+       
+
+        T Foo1<T>() {throw new NotImplementedException();}
+        A<T> Foo2<T>() {throw new NotImplementedException();}
+        G<T1,T2> Foo3<T1, T2>() {throw new NotImplementedException();}
+
+        void Bar1(int p1) {}
+        void Bar2<T>(T p1, B<T> p2) {}
+        void Bar3<T>(T p1, T p2) {}
+
+        class G<T1, T2> {}
+        class A<T> : B<T> {}
+        class B<T> {}
+    }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                            .RegularPreview
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                            );
+            compilation.VerifyDiagnostics();
+        }
     }
 }
