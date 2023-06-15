@@ -1554,9 +1554,9 @@ public class Test
     {
         public void M() 
         {
-            //int temp1 = Foo1(); // Inferred: Foo1<int>()
-            //Bar1(Foo1()); // Inferred: Bar1(Foo1<int>())
-            //B<int> temp2 = Foo2(); // Inferred: Foo2<A<int>>()
+            int temp1 = Foo1(); // Inferred: Foo1<int>()
+            Bar1(Foo1()); // Inferred: Bar1(Foo1<int>())
+            B<int> temp2 = Foo2(); // Inferred: Foo2<A<int>>()
             //G<int, _> temp3 = Foo3<_, int>(); // Can't be inferred Foo3 can't be inferred without target and target doesn't have natural type
             //Bar3(new(), "");
             Bar2(Foo1(), (A<int>)null); // Inferred: Bar2<int>(Foo1<int>(), (List<int>)null) 
