@@ -5771,6 +5771,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 !type.IsAbstract)
             {
                 var method = memberResolutionResult.Member;
+                type = method.ContainingType;
+                candidateConstructors = candidateConstructors.SelectAsArray(x => type.Constructors.First(y => y.OriginalDefinition == x.OriginalDefinition));
 
                 bool hasError = false;
 

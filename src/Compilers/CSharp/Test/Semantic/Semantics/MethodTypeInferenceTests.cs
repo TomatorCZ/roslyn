@@ -1557,8 +1557,7 @@ public class Test
             int temp1 = Foo1(); // Inferred: Foo1<int>()
             Bar1(Foo1()); // Inferred: Bar1(Foo1<int>())
             B<int> temp2 = Foo2(); // Inferred: Foo2<A<int>>()
-            //G<int, _> temp3 = Foo3<_, int>(); // Can't be inferred Foo3 can't be inferred without target and target doesn't have natural type
-            //Bar3(new(), "");
+            //G<int, _> temp3 = Foo3<_, int>(); // Can't be inferred because Foo3 can't be inferred without target and target doesn't have natural type
             Bar2(Foo1(), (A<int>)null); // Inferred: Bar2<int>(Foo1<int>(), (List<int>)null) 
         }
     
@@ -1585,6 +1584,218 @@ public class Test
                             .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
                             );
             compilation.VerifyDiagnostics();
+        }
+        //TODO: ref
+
+        [Fact]
+        public void ConstructorTypeHints_Simple()
+        {
+            var source = """
+    using System;
+
+    public class Program
+    {
+        public static void Main() 
+        {
+            var temp1 = new GC1<byte>();
+            new C1<int, _>("hi"); // C1<int, string>(string)
+            new C2<_, _>(1,1); // C2<int, int>(int, int)
+            new C2<_>(1,1); //C2<int>(int, int)
+            new C3<int, _, string, _>(new GC2<byte, short>()); // C3<int, byte, string, short>(GC2<byte, short>)
+            new C4<_, _, string>(intVal => intVal + 1, x => x.ToString(), str => str.Length); // C4<int, int, string>(Func<int, int>, Func<int, string>, Func<string, int>)
+            new C5(1); // C5(int)
+            new C6<_>(1, temp1); // C6<byte>(int p1, params GC1[] args)
+            new C6<_>(1, temp1, temp1); // C6<byte>(int p1, params GC1[] args)
+        }
+    }
+
+    public class A<T> {}
+    public class B<T> : A<T> {}
+    public class GC2<T1, T2> {}
+    public class GC1<T> {}
+
+    public class C1<T1, T2> 
+    {
+        public C1(T2 p2) { }    
+    }
+
+    public class C2<T1, T2> 
+    {
+        public C2(T1 p1, T2 p2) { }
+    }
+
+    public class C2<T1> 
+    {
+        public C2(T1 p1, int p2) { }
+    }
+
+    public class C3<T1, T2, T3, T4> 
+    {
+        public C3(GC2<T2, T4> p24) { }
+    }
+
+    public class C4<T1, T2, T3> 
+    {
+        public C4(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { }
+    }
+
+    public class C5<T1> 
+    {
+        public C5(T1 p1) {}
+    }
+
+    public class C5 
+    {
+        public C5(byte p1) {}
+    }
+
+    public class C6<T>
+    {
+        public C6(int p1, params GC1<T>[] args) {}
+    }
+    """;
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                            .RegularPreview
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                            );
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                    "GC1<System.Byte>.GC1()",
+                    "C1<System.Int32, System.String>.C1(System.String p2)",
+                    "C2<System.Int32, System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
+                    "C2<System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
+                    "C3<System.Int32, System.Byte, System.String, System.Int16>.C3(GC2<System.Byte, System.Int16> p24)",
+                    "GC2<System.Byte, System.Int16>.GC2()",
+                    "C4<System.Int32, System.Int32, System.String>.C4(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                    "C5.C5(System.Byte p1)",
+                    "C6<System.Byte>.C6(System.Int32 p1, params GC1<System.Byte>[] args)",
+                    "C6<System.Byte>.C6(System.Int32 p1, params GC1<System.Byte>[] args)"
+                };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_Nested()
+        {
+            var source = """
+    public class Program 
+    {
+        public static void M1() {
+            var temp = new B<int>();
+            new C5<A<_>>(temp); // C5<A<int>>(A<int>)
+        }
+    }
+    public class A<T> {}
+    public class B<T> : A<T> {}
+
+    public class C5<T> 
+    {
+        public C5(T p1) {}
+    }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                            .RegularPreview
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                            );
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                    "B<System.Int32>.B()",
+                    "C5<A<System.Int32>>.C5(A<System.Int32> p1)"
+                };
+            CheckCallSites(model, methodCalls, callsites);
+        }
+        [Fact]
+        [Fact]
+        public void ConstructorTypeHints_Target() 
+        { }
+
+        //TDOO: indexer, dictionary 
+        
+        [Fact]
+        public void ConstructorTypeHints_Dynamic()
+        {
+            var source = """
+    public class Program
+    {
+        public static void M1()
+        {
+            dynamic temp = "";
+            var temp2 = new A<_, int>(temp, 1); // Not checked because of dynamic
+        }
+    }
+
+    public class A<T1, T2> 
+    {
+        public A(T1 p1, T2 p2) {}
+    }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                            .RegularPreview
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                            );
+            compilation.VerifyDiagnostics();
+        }
+
+        [Fact]
+        public void ConstructorTypeHints_NotInferredRecovery()
+        {
+            var source = """
+    #nullable enable
+
+    public class Program 
+    {
+        public void M() 
+        {
+            new F1<_,_>(""); // Error: can't infer T1
+            new F1<_,int>(""); // Error: T2 == int
+            new F1<string,byte>(257); // Error: T2 = byte
+            //new C2(1,1); // Error: C2 is not defined
+            //new C5(257); // Error: typeof(p1) == int
+        }
+    }
+
+    public class F1<T1, T2>
+    {
+        public F1(T2 p2) { }
+    }
+    """;
+
+            var compilation = CreateCSharpCompilation(source, parseOptions: TestOptions
+                            .RegularPreview
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceInVariableDecl))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceMethodInvocation))
+                            .WithFeature(nameof(MessageID.IDS_FeaturePartialTypeInferenceObjectCreation))
+                            );
+            compilation.VerifyDiagnostics(new[] {
+                // (7,13): error CS0411: The type arguments for method 'F1<T1, T2>.F1(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,_>(""); // Error: can't infer T1
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("F1<T1, T2>.F1(T2)").WithLocation(7, 13),
+                // (8,13): error CS0411: The type arguments for method 'F1<T1, T2>.F1(T2)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,int>(""); // Error: T2 == int
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,int>").WithArguments("F1<T1, T2>.F1(T2)").WithLocation(8, 13),
+                // (9,29): error CS1503: Argument 1: cannot convert from 'int' to 'byte'
+                //         new F1<string,byte>(257); // Error: T2 = byte
+                Diagnostic(ErrorCode.ERR_BadArgType, "257").WithArguments("1", "int", "byte").WithLocation(9, 29)
+                }
+            );
         }
     }
 }
