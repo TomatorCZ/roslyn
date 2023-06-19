@@ -1205,5 +1205,90 @@ public class Test
             var authorResultType = model.GetTypeInfo(authorResult).Type;
             Assert.Equal("Author", authorResultType.Name);
         }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialMethodTypeInference_Simple() 
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialMethodTypeInference_BreakingChange()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialMethodTypeInference_Nested()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialMethodTypeInference_Dynamic()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialMethodTypeInference_ErrorRecovery()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialMethodTypeInference_Nullable()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Simple()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_DiamondOperator()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Nested()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Target()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Initializer()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_WhereClauses ()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Complex() 
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Dynamic()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_ErrorRecovery()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialObjectCreationTypeInference_Nullable()
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialArrayCreationTypeInference_Simple() 
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialArrayCreationTypeInference_Nested() 
+        { }
+
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialArrayCreationTypeInference_Target() 
+        { }
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialArrayCreationTypeInference_Dynamic() 
+        { }
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialArrayCreationTypeInference_ErrorRecovery() 
+        { }
+        [Fact(Skip = "Not implemented yet")]
+        public void PartialArrayCreationTypeInference_Nullable() 
+        { }
     }
 }
