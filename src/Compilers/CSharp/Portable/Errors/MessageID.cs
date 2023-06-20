@@ -272,6 +272,8 @@ namespace Microsoft.CodeAnalysis.CSharp
         IDS_FeatureUsingTypeAlias = MessageBase + 12834,
 
         IDS_FeatureInstanceMemberInNameof = MessageBase + 12835,
+
+        IDS_FeaturePartialMethodTypeInference = MessageBase + 12835,
     }
 
     // Message IDs may refer to strings that need to be localized.
@@ -316,6 +318,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             // Check for current experimental features, if any, in the current branch.
             switch (feature)
             {
+                case MessageID.IDS_FeaturePartialMethodTypeInference:
+                    return nameof(MessageID.IDS_FeaturePartialMethodTypeInference);
                 default:
                     return null;
             }

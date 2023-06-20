@@ -588,10 +588,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return BindImplicitObjectCreationExpression((ImplicitObjectCreationExpressionSyntax)node, diagnostics);
                 case SyntaxKind.IdentifierName:
                 case SyntaxKind.GenericName:
-                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics);
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, false, diagnostics);
                 case SyntaxKind.SimpleMemberAccessExpression:
                 case SyntaxKind.PointerMemberAccessExpression:
-                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics: diagnostics);
+                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics: diagnostics, allowInferredType: false);
                 case SyntaxKind.SimpleAssignmentExpression:
                     return BindAssignment((AssignmentExpressionSyntax)node, diagnostics);
                 case SyntaxKind.CastExpression:
@@ -1313,9 +1313,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// Since the parser cannot distinguish, it parses it as before and depends on the binder
         /// to handle a qualified name appearing as an expression.
         /// </summary>
-        private BoundExpression BindQualifiedName(QualifiedNameSyntax node, BindingDiagnosticBag diagnostics)
+        private BoundExpression BindQualifiedName(QualifiedNameSyntax node, BindingDiagnosticBag diagnostics, bool allowInferedType = false)
         {
-            return BindMemberAccessWithBoundLeft(node, this.BindLeftOfPotentialColorColorMemberAccess(node.Left, diagnostics), node.Right, node.DotToken, invoked: false, indexed: false, diagnostics: diagnostics);
+            return BindMemberAccessWithBoundLeft(node, this.BindLeftOfPotentialColorColorMemberAccess(node.Left, diagnostics), node.Right, node.DotToken, invoked: false, indexed: false, diagnostics: diagnostics, allowInferredType: allowInferedType);
         }
 
         private BoundExpression BindParenthesizedExpression(ExpressionSyntax innerExpression, BindingDiagnosticBag diagnostics)
@@ -1458,6 +1458,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             SimpleNameSyntax node,
             bool invoked,
             bool indexed,
+            bool allowInferredTypeArgs,
             BindingDiagnosticBag diagnostics)
         {
             Debug.Assert(node != null);
@@ -1501,7 +1502,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             Debug.Assert(node.Arity == typeArgumentList.Count);
 
             var typeArgumentsWithAnnotations = hasTypeArguments ?
-                BindTypeArguments(typeArgumentList, diagnostics) :
+                BindTypeArguments(typeArgumentList, diagnostics, null, allowInferredTypeArgs) :
                 default(ImmutableArray<TypeWithAnnotations>);
 
             var lookupResult = LookupResult.GetInstance();
@@ -3378,7 +3379,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             //
             // SPEC ends
 
-            var type = (ArrayTypeSymbol)BindArrayType(node.Type, diagnostics, permitDimensions: true, basesBeingResolved: null, disallowRestrictedTypes: true).Type;
+            var type = (ArrayTypeSymbol)BindArrayType(node.Type, diagnostics, permitDimensions: true, basesBeingResolved: null, disallowRestrictedTypes: true, allowInferredType: false).Type;
 
             // CONSIDER: 
             //
@@ -3861,7 +3862,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             ArrayTypeSyntax arrayTypeSyntax = (ArrayTypeSyntax)typeSyntax;
             var elementTypeSyntax = arrayTypeSyntax.ElementType;
-            var arrayType = (ArrayTypeSymbol)BindArrayType(arrayTypeSyntax, diagnostics, permitDimensions: true, basesBeingResolved: null, disallowRestrictedTypes: false).Type;
+            var arrayType = (ArrayTypeSymbol)BindArrayType(arrayTypeSyntax, diagnostics, permitDimensions: true, basesBeingResolved: null, disallowRestrictedTypes: false, allowInferredType: false).Type;
             var elementType = arrayType.ElementTypeWithAnnotations;
 
             TypeSymbol type = GetStackAllocType(node, elementType, diagnostics, out bool hasErrors);
@@ -6361,7 +6362,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             MemberAccessExpressionSyntax node,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredType)
         {
             Debug.Assert(node != null);
             Debug.Assert(invoked == SyntaxFacts.IsInvoked(node));
@@ -6402,7 +6404,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
 
-            return BindMemberAccessWithBoundLeft(node, boundLeft, node.Name, node.OperatorToken, invoked, indexed, diagnostics);
+            return BindMemberAccessWithBoundLeft(node, boundLeft, node.Name, node.OperatorToken, invoked, indexed, diagnostics, allowInferredType);
         }
 
         /// <summary>
@@ -6438,7 +6440,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             // SPEC: static members and nested types of E where a compile-time error would otherwise have occurred. 
 
             var valueDiagnostics = BindingDiagnosticBag.GetInstance(diagnostics);
-            var boundValue = BindIdentifier(left, invoked: false, indexed: false, diagnostics: valueDiagnostics);
+            var boundValue = BindIdentifier(left, invoked: false, indexed: false, allowInferredTypeArgs: false, diagnostics: valueDiagnostics);
 
             Symbol leftSymbol;
             if (boundValue.Kind == BoundKind.Conversion)
@@ -6598,7 +6600,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             SyntaxToken operatorToken,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredType)
         {
             Debug.Assert(node != null);
             Debug.Assert(boundLeft != null);
@@ -6654,7 +6657,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
 
                 var typeArgumentsSyntax = right.Kind() == SyntaxKind.GenericName ? ((GenericNameSyntax)right).TypeArgumentList.Arguments : default(SeparatedSyntaxList<TypeSyntax>);
-                var typeArguments = typeArgumentsSyntax.Count > 0 ? BindTypeArguments(typeArgumentsSyntax, diagnostics) : default(ImmutableArray<TypeWithAnnotations>);
+                var typeArguments = typeArgumentsSyntax.Count > 0 ? BindTypeArguments(typeArgumentsSyntax, diagnostics, allowInferredTypes: allowInferredType) : default(ImmutableArray<TypeWithAnnotations>);
 
                 // A member-access consists of a primary-expression, a predefined-type, or a 
                 // qualified-alias-member, followed by a "." token, followed by an identifier, 
@@ -9514,7 +9517,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             BoundExpression receiver = GetReceiverForConditionalBinding(node, diagnostics);
 
-            var memberAccess = BindMemberAccessWithBoundLeft(node, receiver, node.Name, node.OperatorToken, invoked, indexed, diagnostics);
+            var memberAccess = BindMemberAccessWithBoundLeft(node, receiver, node.Name, node.OperatorToken, invoked, indexed, diagnostics, false);
             return memberAccess;
         }
 

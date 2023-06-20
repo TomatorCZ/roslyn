@@ -26,11 +26,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             switch (node.Kind())
             {
                 case SyntaxKind.IdentifierName:
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, false, diagnostics); 
                 case SyntaxKind.GenericName:
-                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics);
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference), diagnostics);
                 case SyntaxKind.SimpleMemberAccessExpression:
                 case SyntaxKind.PointerMemberAccessExpression:
-                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics);
+                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics, node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference));
                 case SyntaxKind.ParenthesizedExpression:
                     return BindMethodGroup(((ParenthesizedExpressionSyntax)node).Expression, invoked: false, indexed: false, diagnostics: diagnostics);
                 default:
@@ -203,7 +204,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     var memberAccess = (MemberAccessExpressionSyntax)node.Expression;
                     analyzedArguments.Clear();
                     CheckContextForPointerTypes(nested, diagnostics, result); // BindExpression does this after calling BindExpressionInternal
-                    boundExpression = BindMemberAccessWithBoundLeft(memberAccess, result, memberAccess.Name, memberAccess.OperatorToken, invoked: true, indexed: false, diagnostics);
+                    boundExpression = BindMemberAccessWithBoundLeft(memberAccess, result, memberAccess.Name, memberAccess.OperatorToken, invoked: true, indexed: false, diagnostics, node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference));
                 }
 
                 invocations.Free();

@@ -1206,7 +1206,128 @@ public class Test
             Assert.Equal("Author", authorResultType.Name);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
+        public void PartialMethodTypeInference_InferredType1() 
+        { 
+            var source = """
+using System;
+
+namespace X;
+
+class P
+{
+    static void M() 
+    {
+        A temp1 = null;
+        F<_>(temp1);
+        P.F<_>(temp1);
+        global::X.P.F<_>(temp1);
+
+        A? temp2 = null;
+        F<_?>(temp2);
+
+        A<A?>? temp3 = null;
+        F<A<_?>?>(temp3);
+
+        A.B<A> temp4 = null;
+        F<global::X.P.A.B<_>>(temp4);
+        F<A.B<_>>(temp4);
+
+        A[] temp5 = null;
+        F<_[]>(temp5);
+
+        A<A>[] temp6 = null;
+        F<A<_>[]>(temp6);
+
+        var temp7 = (1, 1);
+        F<(_, _)>(temp7);
+    }
+
+    static void F<T>(T p) {}
+    class A 
+    {
+        public class B<T> {}
+    }
+    class A<T> {}
+}
+
+class _ 
+{}
+
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics();
+        }
+
+        [Fact]
+        public void PartialMethodTypeInference_InferredType2()
+        {
+            var source = """
+using System;
+
+namespace X;
+#nullable enable
+
+class P
+{
+    static void M() 
+    {
+        A temp1 = null;
+        F<_>(temp1);
+        P.F<_>(temp1);
+        global::X.P.F<_>(temp1);
+
+        A? temp2 = null;
+        F<_?>(temp2);
+
+        A<A?>? temp3 = null;
+        F<A<_?>?>(temp3);
+
+        A.B<A> temp4 = null;
+        F<global::X.P.A.B<_>>(temp4);
+        F<A.B<_>>(temp4);
+
+        A[] temp5 = null;
+        F<_[]>(temp5);
+
+        A<A>[] temp6 = null;
+        F<A<_>[]>(temp6);
+
+        var temp7 = (1, 1);
+        F<(_, _)>(temp7);
+
+        (new B()).F<_>(1).F<_>(1).F<_>(1);
+
+        A<_>.F<_>(temp1); // Error
+    }
+
+    static void F<T>(T p) {}
+    class A 
+    {
+        public class B<T> {}
+    }
+    class A<T1> 
+    {
+        public static void F<T2>(T2 p1) {}
+    }
+    class B 
+    {
+        public B F<T>(T p) {throw new NotImplementedException();}  
+    }
+}
+
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics();
+        }
+
+        [Fact]
         public void PartialMethodTypeInference_Simple() 
         { }
 
