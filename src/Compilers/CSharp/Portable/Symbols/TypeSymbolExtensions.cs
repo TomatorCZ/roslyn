@@ -756,6 +756,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     case TypeKind.TypeParameter:
                     case TypeKind.Submission:
                     case TypeKind.Enum:
+                    case TypeKindInternal.InferredType:
                         return null;
 
                     case TypeKind.Error:

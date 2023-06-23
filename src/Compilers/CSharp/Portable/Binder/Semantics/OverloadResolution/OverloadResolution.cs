@@ -3436,6 +3436,42 @@ outerDefault:
                 result;
         }
 
+        private static bool IsInferredType(TypeWithAnnotations type)
+        {
+            if (type.TypeKind == TypeKindInternal.InferredType)
+                return true;
+
+            if (type.Type is NamedTypeSymbol { } symbol)
+                return symbol.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType);
+
+            if (type.Type is ArrayTypeSymbol { } arraySymbol)
+                return IsInferredType(arraySymbol.ElementTypeWithAnnotations);
+
+            return false;
+        }
+
+        private static ImmutableArray<SourceInferredTypeSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList)
+        {
+            var inferredArguments = ArrayBuilder<SourceInferredTypeSymbol>.GetInstance();
+            for (int i = 0; i < typeArgumentList.Length; i++)
+                SeekTypeVars(inferredArguments, typeArgumentList[i]);
+
+            return inferredArguments.ToImmutableAndFree();
+        }
+
+        private static void SeekTypeVars(ArrayBuilder<SourceInferredTypeSymbol> inferredArguments, TypeWithAnnotations type)
+        {
+            if (type.TypeKind == TypeKindInternal.InferredType)
+                inferredArguments.Add((SourceInferredTypeSymbol)type.Type);
+
+            if (type.Type is NamedTypeSymbol { } symbol)
+                foreach (var item in symbol.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics)
+                    SeekTypeVars(inferredArguments, item);
+
+            if (type.Type is ArrayTypeSymbol { } arraySymbol)
+                SeekTypeVars(inferredArguments, arraySymbol.ElementTypeWithAnnotations);
+        }
+
         private MemberResolutionResult<TMember> IsApplicable<TMember>(
             TMember member,                // method or property
             TMember leastOverriddenMember, // method or property 
@@ -3475,7 +3511,7 @@ outerDefault:
                     MethodSymbol leastOverriddenMethod = (MethodSymbol)(Symbol)leastOverriddenMember;
 
                     ImmutableArray<TypeWithAnnotations> typeArguments;
-                    if (typeArgumentsBuilder.Count > 0)
+                    if (typeArgumentsBuilder.Count > 0 && !typeArgumentsBuilder.Any(IsInferredType))
                     {
                         // generic type arguments explicitly specified at call-site:
                         typeArguments = typeArgumentsBuilder.ToImmutable();
@@ -3490,7 +3526,8 @@ outerDefault:
                                             originalEffectiveParameters,
                                             out hasTypeArgumentsInferredFromFunctionType,
                                             out inferenceError,
-                                            ref useSiteInfo);
+                                            ref useSiteInfo,
+                                            typeArgumentsBuilder.ToImmutable());
                         if (typeArguments.IsDefault)
                         {
                             return new MemberResolutionResult<TMember>(member, leastOverriddenMember, inferenceError, hasTypeArgumentInferredFromFunctionType: false);
@@ -3577,7 +3614,8 @@ outerDefault:
             EffectiveParameters originalEffectiveParameters,
             out bool hasTypeArgumentsInferredFromFunctionType,
             out MemberAnalysisResult error,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            ImmutableArray<TypeWithAnnotations> typeArgumentHints)
         {
             var args = arguments.Arguments.ToImmutable();
 
@@ -3586,7 +3624,7 @@ outerDefault:
             // a possibly constructed generic type, is exceedingly subtle. See the comments
             // in "Infer" for details.
 
-            var inferenceResult = MethodTypeInferrer.Infer(
+            var inferenceResult = TypeInferrer.InferMethod(
                 _binder,
                 _binder.Conversions,
                 originalTypeParameters,
@@ -3594,7 +3632,19 @@ outerDefault:
                 originalEffectiveParameters.ParameterTypes,
                 originalEffectiveParameters.ParameterRefKinds,
                 args,
-                ref useSiteInfo);
+                ref useSiteInfo,
+                GetInferredSymbols(typeArgumentHints),
+                typeArgumentHints);
+
+            //var inferenceResult = MethodTypeInferrer.Infer(
+            //    _binder,
+            //    _binder.Conversions,
+            //    originalTypeParameters,
+            //    method.ContainingType,
+            //    originalEffectiveParameters.ParameterTypes,
+            //    originalEffectiveParameters.ParameterRefKinds,
+            //    args,
+            //    ref useSiteInfo);
 
             if (inferenceResult.Success)
             {

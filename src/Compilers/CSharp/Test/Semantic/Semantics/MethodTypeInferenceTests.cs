@@ -1308,7 +1308,79 @@ class P
 
         [Fact]
         public void PartialMethodTypeInference_Simple() 
-        { }
+        {
+            var source = """
+using System;
+
+namespace X;
+
+public class P
+{
+    public void M2() 
+    {
+        // Inferred: [T1 = int, T2 = string] Simple test
+        F1<_, string>(1); 
+        // Inferred: [T1 = int, T2 = string] Choose overload based on arity
+        F2<_,_>(1,""); 
+        // Inferred: [T1 = int, T2 = string, T3 = string, T4 = string] Constructed type
+        F3<int, _, string, _>(new G2<string, string>()); 
+        // Inferred: [T1 = int, T2 = int, T3 = string] Circle of dependency
+        F4<_, _, string>(x => x + 1, y => y.ToString(),z => z.Length); 
+        // Inferred: [T1 = string] Expanded form #1
+        F5<string>(1); 
+        // Inferred: [T1 = string] Expanded form #2
+        F5<_>(1, ""); 
+        // Inferred: [T1 = string] Expanded form #3
+        F5<_>(1, "", "");
+    }
+    void F1<T1, T2>(T1 p1) {}
+    void F2<T1, T2>(T1 p1, T2 p2) {}
+    void F2<T1>(T1 p1, string p2) {}
+    void F3<T1, T2, T3, T4>(G2<T2, T4> p24) {}
+    class G2<T1, T2> {}
+    void F4<T1, T2, T3>(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { }
+    void F5<T>(int p1, params T[] args) {}
+}
+""";
+
+            var compilation = CreateCompilation(
+                source, 
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics();
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                    "void X.P.F1<System.Int32, System.String>(System.Int32 p1)",
+                    "void X.P.F2<System.Int32, System.String>(System.Int32 p1, System.String p2)",
+                    "void X.P.F3<System.Int32, System.String, System.String, System.String>(X.P.G2<System.String, System.String> p24)",
+                    "void X.P.F4<System.Int32, System.Int32, System.String>(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                    "System.String System.Int32.ToString()",
+                    "void X.P.F5<System.String>(System.Int32 p1, params System.String[] args)",
+                    "void X.P.F5<System.String>(System.Int32 p1, params System.String[] args)",
+                    "void X.P.F5<System.String>(System.Int32 p1, params System.String[] args)"
+                };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
+
+        private static void CheckCallSites(SemanticModel model, InvocationExpressionSyntax[] invocations, string[] callsites)
+        {
+            Assert.Equal(callsites.Length, invocations.Length);
+            for (int i = 0; i < invocations.Length; i++)
+                CheckCallSite(model, invocations[i], callsites[i]);
+        }
+
+        private static void CheckCallSite(SemanticModel model, InvocationExpressionSyntax invocation, string callsite)
+        {
+            Assert.Null(model.GetDeclaredSymbol(invocation));
+            Assert.NotNull(model.GetTypeInfo(invocation).Type);
+            var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
+            var text = symbol.ToTestDisplayString(includeNonNullable: true);
+            Assert.NotNull(symbol);
+            Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialMethodTypeInference_BreakingChange()

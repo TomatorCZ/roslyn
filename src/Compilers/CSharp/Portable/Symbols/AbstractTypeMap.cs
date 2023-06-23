@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
@@ -102,6 +103,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     break;
                 case SymbolKind.TypeParameter:
                     return SubstituteTypeParameter((TypeParameterSymbol)previous);
+                case SymbolKindInternal.InferredType:
+                    return SubstituteInferredType((SourceInferredTypeSymbol)previous);
                 case SymbolKind.ArrayType:
                     result = SubstituteArrayType((ArrayTypeSymbol)previous);
                     break;
@@ -173,6 +176,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         protected virtual TypeSymbol SubstituteDynamicType()
         {
             return DynamicTypeSymbol.Instance;
+        }
+
+        protected virtual TypeWithAnnotations SubstituteInferredType(SourceInferredTypeSymbol typeArgument)
+        {
+            return TypeWithAnnotations.Create(typeArgument);
         }
 
         protected virtual TypeWithAnnotations SubstituteTypeParameter(TypeParameterSymbol typeParameter)

@@ -81,7 +81,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 #nullable disable
 
         internal static bool IsNullableReference(TypeSymbol type)
-            => type is null || !(type.IsValueType || type.IsErrorType());
+            => type is null || type.TypeKind == TypeKindInternal.InferredType|| !(type.IsValueType || type.IsErrorType());
 
         protected override DiagnosticInfo ResolveInfo() => IsNullableReference(_type.Type) ? _info : null;
     }

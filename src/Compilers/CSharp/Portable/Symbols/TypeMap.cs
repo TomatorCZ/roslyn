@@ -147,7 +147,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             Debug.Assert(oldOwner.ConstructedFrom == oldOwner);
             return WithAlphaRename(oldOwner.OriginalDefinition.TypeParameters, newOwner, out newTypeParameters);
         }
-
+        
         internal TypeMap WithConcatAlphaRename(
             MethodSymbol oldOwner,
             Symbol newOwner,
@@ -215,5 +215,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             return mapping;
         }
+
+        internal TypeVariableMap AsTypeVariableMap() 
+        {
+            return new TypeVariableMap(Mapping.Keys.Cast<TypeSymbol>().ToImmutableArray(), Mapping.Values.ToImmutableArray());
+        }    
     }
 }
