@@ -1382,13 +1382,55 @@ public class P
             Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
         }
 
-        [Fact(Skip = "Not implemented yet")]
-        public void PartialMethodTypeInference_BreakingChange()
-        { }
-
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialMethodTypeInference_Nested()
-        { }
+        {
+            var source = """
+class P
+{
+    void M1() 
+    {
+        B1<int> temp1 = null;
+        // Inferred: [ T1 = A1<int> ] Wrapper conversion
+        F6<A1<_>>(temp1); 
+
+        B2<int, string> temp2 = null;
+        // Inferred: [ T1 = A2<int, string> ] Wrapper conversion with type argument
+        F6<A2<_, string>>(temp2); 
+
+        C2<int, B> temp3 = null;
+        // Inferred: [ I2<int, A> ] Wrapper conversion with type argument conversion
+        F6<I2<_, A>>(temp3); 
+    }   
+
+    void F6<T1>(T1 p1) {}
+
+    class A {}
+    class B : A{}
+    class A1<T> {}
+    class B1<T> : A1<T> {}
+    class A2<T1, T2> {}
+    class B2<T1, T2> : A2<T1, T2> {}
+    interface I2<in T1, out T2> {}
+    class C2<T1, T2> : I2<T1, T2> {}
+}           
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics();
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "void P.F6<P.A1<System.Int32>>(P.A1<System.Int32> p1)",
+                "void P.F6<P.A2<System.Int32, System.String>>(P.A2<System.Int32, System.String> p1)",
+                "void P.F6<P.I2<System.Int32, P.A>>(P.I2<System.Int32, P.A> p1)"};
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialMethodTypeInference_Dynamic()
