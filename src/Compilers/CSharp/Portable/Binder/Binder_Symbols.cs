@@ -11,7 +11,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
-using Microsoft.CodeAnalysis.CSharp.Symbols.Source;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.RuntimeMembers;
@@ -633,14 +632,14 @@ namespace Microsoft.CodeAnalysis.CSharp
             bool disallowRestrictedTypes,
             bool allowInferredType)
         {
-            TypeWithAnnotations type = BindType(node.ElementType, diagnostics, basesBeingResolved, allowInferredType);
-            if (type.IsStatic)
+            TypeWithAnnotations type = BindType(node.ElementType, diagnostics, basesBeingResolved, false, allowInferredType);
+            if (type.TypeKind != TypeKindInternal.InferredType && type.IsStatic)
             {
                 // CS0719: '{0}': array elements cannot be of static type
                 Error(diagnostics, ErrorCode.ERR_ArrayOfStaticClass, node.ElementType, type.Type);
             }
 
-            if (disallowRestrictedTypes)
+            if (type.TypeKind != TypeKindInternal.InferredType && disallowRestrictedTypes)
             {
                 // Restricted types cannot be on the heap, but they can be on the stack, so are allowed in a stackalloc
                 if (ShouldCheckConstraints)
@@ -692,7 +691,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 var argumentSyntax = syntax.Elements[i];
 
-                var argumentType = BindType(argumentSyntax.Type, diagnostics, basesBeingResolved, allowInferredType);
+                var argumentType = BindType(argumentSyntax.Type, diagnostics, basesBeingResolved, false, allowInferredType);
                 types.Add(argumentType);
 
                 string name = null;

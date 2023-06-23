@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
@@ -1210,56 +1211,30 @@ public class Test
         public void PartialMethodTypeInference_InferredType1() 
         { 
             var source = """
-using System;
-
-namespace X;
-
 class P
 {
     static void M() 
     {
         A temp1 = null;
         F<_>(temp1);
-        P.F<_>(temp1);
-        global::X.P.F<_>(temp1);
-
-        A? temp2 = null;
-        F<_?>(temp2);
-
-        A<A?>? temp3 = null;
-        F<A<_?>?>(temp3);
-
-        A.B<A> temp4 = null;
-        F<global::X.P.A.B<_>>(temp4);
-        F<A.B<_>>(temp4);
-
-        A[] temp5 = null;
-        F<_[]>(temp5);
-
-        A<A>[] temp6 = null;
-        F<A<_>[]>(temp6);
-
-        var temp7 = (1, 1);
-        F<(_, _)>(temp7);
     }
 
     static void F<T>(T p) {}
-    class A 
-    {
-        public class B<T> {}
     }
-    class A<T> {}
-}
 
-class _ 
-{}
+class A {}
+class _ {}
 
 """;
 
             var compilation = CreateCompilation(
                 source,
                 parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
-            compilation.VerifyDiagnostics();
+            compilation.VerifyDiagnostics(new[] {
+                // (6,14): error CS1503: Argument 1: cannot convert from 'A' to '_'
+                //         F<_>(temp1);
+                Diagnostic(ErrorCode.ERR_BadArgType, "temp1").WithArguments("1", "A", "_").WithLocation(6, 14)
+            });
         }
 
         [Fact]
@@ -1275,7 +1250,7 @@ class P
 {
     static void M() 
     {
-        A temp1 = null;
+        A temp1 = new A();
         F<_>(temp1);
         P.F<_>(temp1);
         global::X.P.F<_>(temp1);
@@ -1286,14 +1261,14 @@ class P
         A<A?>? temp3 = null;
         F<A<_?>?>(temp3);
 
-        A.B<A> temp4 = null;
+        A.B<A> temp4 = new A.B<A>();
         F<global::X.P.A.B<_>>(temp4);
         F<A.B<_>>(temp4);
 
-        A[] temp5 = null;
+        A[] temp5 = new A[1];
         F<_[]>(temp5);
 
-        A<A>[] temp6 = null;
+        A<A>[] temp6 = new A<A>[1];
         F<A<_>[]>(temp6);
 
         var temp7 = (1, 1);
@@ -1324,7 +1299,11 @@ class P
             var compilation = CreateCompilation(
                 source,
                 parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
-            compilation.VerifyDiagnostics();
+            compilation.VerifyDiagnostics(new[] {
+                // (36,11): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         A<_>.F<_>(temp1); // Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(36, 11)
+            });
         }
 
         [Fact]

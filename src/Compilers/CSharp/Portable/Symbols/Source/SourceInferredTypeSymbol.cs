@@ -9,7 +9,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using Microsoft.CodeAnalysis.PooledObjects;
 
-namespace Microsoft.CodeAnalysis.CSharp.Symbols.Source
+namespace Microsoft.CodeAnalysis.CSharp.Symbols
 {
     [DebuggerDisplay("{GetDebuggerDisplay(),nq}")]
     internal sealed class SourceInferredTypeSymbol : TypeSymbol
@@ -37,7 +37,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Source
 
         public override ImmutableArray<Location> Locations => throw ExceptionUtilities.Unreachable();
 
-        public override ImmutableArray<SyntaxReference> DeclaringSyntaxReferences => throw ExceptionUtilities.Unreachable();
+        public override ImmutableArray<SyntaxReference> DeclaringSyntaxReferences => ImmutableArray.Create(Syntax.GetReference());
 
         public override Accessibility DeclaredAccessibility => throw ExceptionUtilities.Unreachable();
 
