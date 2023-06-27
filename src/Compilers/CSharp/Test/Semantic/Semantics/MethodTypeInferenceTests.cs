@@ -1432,7 +1432,7 @@ class P
             CheckCallSites(model, methodCalls, callsites);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialMethodTypeInference_Dynamic()
         { 
             var source = """
@@ -1475,9 +1475,36 @@ class P {
             });
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialMethodTypeInference_ErrorRecovery()
         {
+            var source = """
+class P {
+    void M1() 
+    {
+        F1<_,_>(""); // Error: Can't infer T2
+        F1<int, string>(""); // Error: int != string
+        F1<byte,_>(257); // Error: Can't infer T2
+    }
+
+    void F1<T1, T2>(T1 p1) {}
+}
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics(new[] { 
+                // (4,9): error CS0411: The type arguments for method 'P.F1<T1, T2>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F1<_,_>(""); // Error: Can't infer T2
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>(T1)").WithLocation(4, 9),
+                // (5,25): error CS1503: Argument 1: cannot convert from 'string' to 'int'
+                //         F1<int, string>(""); // Error: int != string
+                Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 25),
+                // (6,9): error CS0411: The type arguments for method 'P.F1<T1, T2>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F1<byte,_>(257); // Error: Can't infer T2
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>(T1)").WithLocation(6, 9)
+            });
         }
 
         [Fact(Skip = "Not implemented yet")]
