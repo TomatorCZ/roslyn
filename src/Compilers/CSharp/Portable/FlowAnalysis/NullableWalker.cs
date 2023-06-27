@@ -8312,7 +8312,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             TypeWithState resultType = calculateResultType(targetTypeWithNullability, fromExplicitCast, resultState, isSuppressed, targetType);
 
-            if (!conversionOperand.HasErrors && !targetType.IsErrorType())
+            if (!conversionOperand.HasErrors && !targetType.IsErrorType()  && !OverloadResolution.IsInferredType(targetType))
             {
                 // Need to report all warnings that apply since the warnings can be suppressed individually.
                 if (reportTopLevelWarnings)

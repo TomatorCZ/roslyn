@@ -1434,11 +1434,51 @@ class P
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialMethodTypeInference_Dynamic()
-        { }
+        { 
+            var source = """
+class P {
+    void M1() 
+    {
+        dynamic temp4 = "";
+
+        // Inferred: [T1 = int] Error: T1 = string & int
+        F7<string, _>("", temp4, 1);
+        
+        // Inferred: [T1 = int] Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        F7<_, string>(1, temp4, 1); 
+        
+        // Inferred: [T1 = int] Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        temp4.F7<string, _>(temp4);  
+    }
+
+    void F7<T1, T2>(T1 p1, T2 p2, T1 p3) {}
+    void F8<T1>(T1 p1, int p2) {}
+}
+""";
+
+            var compilation = CreateCompilation(
+                    source,
+                    parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (7,9): warning CS9163: Type hints will not be considered in dynamic call.
+                //         F7<string, _>("", temp4, 1);
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, @"F7<string, _>("""", temp4, 1)").WithLocation(7, 9),
+                // (7,34): error CS1503: Argument 3: cannot convert from 'int' to 'string'
+                //         F7<string, _>("", temp4, 1);
+                Diagnostic(ErrorCode.ERR_BadArgType, "1").WithArguments("3", "int", "string").WithLocation(7, 34),
+                // (10,9): warning CS9163: Type hints will not be considered in dynamic call.
+                //         F7<_, string>(1, temp4, 1); 
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, "F7<_, string>(1, temp4, 1)").WithLocation(10, 9),
+                // (13,26): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         temp4.F7<string, _>(temp4);  
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(13, 26)
+            });
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialMethodTypeInference_ErrorRecovery()
-        { }
+        {
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialMethodTypeInference_Nullable()

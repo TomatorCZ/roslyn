@@ -4515,6 +4515,11 @@
         <target state="translated">튜플 요소 이름은(는) 튜플 == 또는 != 연산자의 반대쪽에서 다른 이름이 지정되었거나 이름이 지정되지 않았기 때문에 무시됩니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in dynamic call.</source>
+        <target state="new">Type hints will not be considered in dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">'{0}' 형식 매개 변수가 외부 메서드 '{1}'의 형식 매개 변수와 이름이 같습니다.</target>

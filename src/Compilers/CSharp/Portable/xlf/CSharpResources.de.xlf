@@ -4516,6 +4516,11 @@
         <target state="translated">Der Tupelelementname wird ignoriert, weil ein anderer oder gar kein Name auf der anderen Seite des ==- oder !=-Tupeloperators angegeben wurde.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in dynamic call.</source>
+        <target state="new">Type hints will not be considered in dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">Der Name des Typparameters "{0}" und der Name des Typparameters der äußeren Methode "{1}" sind identisch.</target>

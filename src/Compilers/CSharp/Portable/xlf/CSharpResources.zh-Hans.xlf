@@ -4521,6 +4521,11 @@
         <target state="translated">由于元组 == 或 != 运算符的另一侧指定了其他名称或未指定名称，因此元组元素名称被忽略。</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in dynamic call.</source>
+        <target state="new">Type hints will not be considered in dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">类型参数“{0}”与外部方法“{1}”中的类型参数同名</target>

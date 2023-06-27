@@ -4516,6 +4516,11 @@
         <target state="translated">Název elementu řazené kolekce členů se ignoruje, protože na druhé straně operátoru == nebo != řazené kolekce členů je určený jiný nebo žádný název.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in dynamic call.</source>
+        <target state="new">Type hints will not be considered in dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">Parametr typu {0} má stejný název jako parametr typu z vnější metody {1}.</target>

@@ -4516,6 +4516,11 @@
         <target state="translated">Il nome dell'elemento di tupla viene ignorato perché nell'altra parte dell'operatore == o != di tupla è specificato un nome diverso o non è specificato alcun nome.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in dynamic call.</source>
+        <target state="new">Type hints will not be considered in dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">Il nome del parametro di tipo '{0}' è uguale a quello del parametro di tipo del metodo esterno '{1}'</target>

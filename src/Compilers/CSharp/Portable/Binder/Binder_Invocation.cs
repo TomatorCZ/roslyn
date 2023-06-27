@@ -625,6 +625,13 @@ namespace Microsoft.CodeAnalysis.CSharp
             out bool anyApplicableCandidates)
         {
             BoundExpression result;
+            if (analyzedArguments.Arguments.Any(x => x.Type is { } && x.Type.IsDynamic()) 
+                && !methodGroup.TypeArgumentsOpt.IsDefault 
+                && methodGroup.TypeArgumentsOpt.Any(OverloadResolution.IsInferredType))
+            {
+                Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, syntax);
+            }
+
             CompoundUseSiteInfo<AssemblySymbol> useSiteInfo = GetNewCompoundUseSiteInfo(diagnostics);
             var resolution = this.ResolveMethodGroup(
                 methodGroup, expression, methodName, analyzedArguments, isMethodGroupConversion: false,

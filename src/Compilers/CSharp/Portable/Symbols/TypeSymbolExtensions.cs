@@ -1120,12 +1120,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         {
             RoslynDebug.Assert((object)parameterContainer != null);
 
-            var result = type.VisitType(s_isTypeParameterWithSpecificContainerPredicate, parameterContainer);
+            var result = type.VisitType(s_isTypeParameterWithSpecificContainerPredicate, parameterContainer.TypeParameters);
             return result is object;
         }
 
-        private static readonly Func<TypeSymbol, Symbol, bool, bool> s_isTypeParameterWithSpecificContainerPredicate =
-             (type, parameterContainer, unused) => type.TypeKind == TypeKind.TypeParameter && (object)type.ContainingSymbol == (object)parameterContainer;
+        private static readonly Func<TypeSymbol, ImmutableArray<TypeParameterSymbol>, bool, bool> s_isTypeParameterWithSpecificContainerPredicate =
+             (type, parameterContainer, unused) => type.TypeKind == TypeKind.TypeParameter && parameterContainer.Contains(type);
 
         public static bool ContainsTypeParameters(this TypeSymbol type, HashSet<TypeParameterSymbol> parameters)
         {

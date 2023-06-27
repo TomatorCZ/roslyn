@@ -3436,7 +3436,12 @@ outerDefault:
                 result;
         }
 
-        private static bool IsInferredType(TypeWithAnnotations type)
+        public static bool IsInferredType(TypeSymbol symbol)
+        {
+            return IsInferredType(TypeWithAnnotations.Create(symbol));
+        }
+
+        public static bool IsInferredType(TypeWithAnnotations type)
         {
             if (type.TypeKind == TypeKindInternal.InferredType)
                 return true;
@@ -3492,7 +3497,7 @@ outerDefault:
             bool hasTypeArgumentsInferredFromFunctionType = false;
             if (member.Kind == SymbolKind.Method && (method = (MethodSymbol)(Symbol)member).Arity > 0)
             {
-                if (typeArgumentsBuilder.Count == 0 && arguments.HasDynamicArgument && !inferWithDynamic)
+                if ((typeArgumentsBuilder.Count == 0 || typeArgumentsBuilder.Any(IsInferredType)) && arguments.HasDynamicArgument && !inferWithDynamic)
                 {
                     // Spec 7.5.4: Compile-time checking of dynamic overload resolution:
                     // * First, if F is a generic method and type arguments were provided, 
@@ -3504,7 +3509,26 @@ outerDefault:
                     // We don't need to check constraints of types of the non-elided parameters since they 
                     // have no effect on applicability of this candidate.
                     ignoreOpenTypes = true;
-                    effectiveParameters = constructedEffectiveParameters;
+
+                    if (typeArgumentsBuilder.Any(IsInferredType))
+                    {
+                        var sub = typeArgumentsBuilder.SelectAsArray(
+                            (x, index) => IsInferredType(x) 
+                            ? TypeWithAnnotations.Create(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters[index]) 
+                            : x);
+
+                        var map = new TypeMap(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters, sub);
+
+                        member = (TMember)(Symbol)method.Construct(sub);
+                        leastOverriddenMember = (TMember)(Symbol)((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.Construct(sub);
+
+
+                        effectiveParameters = new EffectiveParameters(map.SubstituteTypes(constructedEffectiveParameters.ParameterTypes), constructedEffectiveParameters.ParameterRefKinds);
+                    }
+                    else
+                    {
+                        effectiveParameters = constructedEffectiveParameters;
+                    }
                 }
                 else
                 {
