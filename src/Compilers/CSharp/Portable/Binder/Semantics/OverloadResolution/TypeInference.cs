@@ -189,7 +189,8 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             var typeVariables = ArrayBuilder<TypeSymbol>.GetInstance();
             typeVariables.AddRange(typeParameters);
-            typeVariables.AddRange(inferredTypeParameters);
+            if (!inferredTypeParameters.IsDefault)
+                typeVariables.AddRange(inferredTypeParameters);
 
             var inferrer = new TypeInferrer(
                 binder.Compilation,
