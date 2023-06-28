@@ -1377,7 +1377,8 @@ public class P
             Assert.Null(model.GetDeclaredSymbol(invocation));
             Assert.NotNull(model.GetTypeInfo(invocation).Type);
             var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
-            var text = symbol.ToTestDisplayString(includeNonNullable: true);
+            if (symbol == null && callsite == null)
+                return;
             Assert.NotNull(symbol);
             Assert.Equal(callsite, symbol.ToTestDisplayString(includeNonNullable: true));
         }
@@ -1507,9 +1508,132 @@ class P {
             });
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialMethodTypeInference_Nullable()
-        { }
+        {
+            var source = """
+using System;
+#nullable enable
+class P {
+    void M1() 
+    {
+        string? temp5 = null;
+        string? temp5a = null;
+        string? temp5b = null;
+        string temp6 = "";
+        C2<int, string> temp7 = new C2<int, string>();
+        C2<int, string?> temp8 = new C2<int, string?>();
+        C2<string?, int> temp9 = new C2<string?, int>();
+
+        // Inferred: [T1 = int, T2 = string!]
+        F8<int, _>(temp5);  
+        // Inferred: [T1 = int, T2 = string!] 
+        F8<int, _>(temp6);
+        // Inferred: [T1 = int?, T2 = string!] 
+        F8<int?, _>(temp5); 
+        // Inferred: [T1 = int?, T2 = string!]
+        F8<int?, _>(temp6);  
+        // Error: _ is non nullable
+        F9<int, _>(temp5a);
+        // Inferred: [T1 = int, T2 = string!]
+        F9<int, _>(temp6);
+        // Error: _ is non nullable
+        F9<int?, _>(temp5b);
+        // Inferred: [T1 = int?, T2 = string!]
+        F9<int?, _>(temp6);  
+        
+        //Inferred: [T1 = I2<int, string?>!] Can convert string to string? because of covariance
+        F10<I2<_, string?>>(temp7);
+        //Error: Can't convert string? to string because of invariance
+        F10<C2<_, string?>>(temp7); 
+        //Inferred: [T1 = I2<System.Int32, System.String!>!]
+        F10<I2<_, _>>(temp7);
+        //Inferred: [T1 = C2<System.Int32, System.String!>!]
+        F10<C2<_, _>>(temp7);
+        //Inferred: [T1 = I2<System.Int32, System.String?>!]
+        F10<I2<_, _?>>(temp8);
+        //Inferred: [T1 = C2<System.Int32, System.String?>!]
+        F10<C2<_, _?>>(temp8);
+        //Error: Can't convert string? to string because of covariance
+        F10<I2<_, string>>(temp8);
+        //Error: Can't convert string? to string because of invariance
+        F10<C2<_, string>>(temp8);
+        //Inferred: [T1 = I2<System.String!, System.Int32>!] Can convert string to string? because of contravariance
+        F10<I2<_, int>>(temp9); 
+        
+        //Inferred: [T1 = string?]
+        F10<_?>("maybe null");
+        //Inferred: [T1 = I2<string?, int>!]
+        F10<I2<_, _?>>(temp7);
+        //Inferred: [T1 = System.Int32] in order to be coherent with the current inference.
+        F10<_?>(1);
+        //Error: Can't be inferred because void F12<T>(Nullable<T> p ) {} and F(1) is not inferred either.
+        F10<Nullable<_>>(1);
+    }
+
+    interface I2<in T1, out T2> {}
+    class C2<T1, T2> : I2<T1, T2> {}
+
+    void F8<T1, T2>(T2? p2) { }
+    void F9<T1, T2>(T2 p2) { }
+    void F10<T1>(T1 p1) {}
+}
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialMethodTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (23,20): warning CS8604: Possible null reference argument for parameter 'p2' in 'void P.F9<int, string>(string p2)'.
+                //         F9<int, _>(temp5a);
+                Diagnostic(ErrorCode.WRN_NullReferenceArgument, "temp5a").WithArguments("p2", "void P.F9<int, string>(string p2)").WithLocation(23, 20),
+                // (27,21): warning CS8604: Possible null reference argument for parameter 'p2' in 'void P.F9<int?, string>(string p2)'.
+                //         F9<int?, _>(temp5b);
+                Diagnostic(ErrorCode.WRN_NullReferenceArgument, "temp5b").WithArguments("p2", "void P.F9<int?, string>(string p2)").WithLocation(27, 21),
+                // (34,29): warning CS8620: Argument of type 'P.C2<int, string>' cannot be used for parameter 'p1' of type 'P.C2<int, string?>' in 'void P.F10<C2<int, string?>>(C2<int, string?> p1)' due to differences in the nullability of reference types.
+                //         F10<C2<_, string?>>(temp7); 
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp7").WithArguments("P.C2<int, string>", "P.C2<int, string?>", "p1", "void P.F10<C2<int, string?>>(C2<int, string?> p1)").WithLocation(34, 29),
+                // (44,28): warning CS8620: Argument of type 'P.C2<int, string?>' cannot be used for parameter 'p1' of type 'P.I2<int, string>' in 'void P.F10<I2<int, string>>(I2<int, string> p1)' due to differences in the nullability of reference types.
+                //         F10<I2<_, string>>(temp8);
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp8").WithArguments("P.C2<int, string?>", "P.I2<int, string>", "p1", "void P.F10<I2<int, string>>(I2<int, string> p1)").WithLocation(44, 28),
+                // (46,28): warning CS8620: Argument of type 'P.C2<int, string?>' cannot be used for parameter 'p1' of type 'P.C2<int, string>' in 'void P.F10<C2<int, string>>(C2<int, string> p1)' due to differences in the nullability of reference types.
+                //         F10<C2<_, string>>(temp8);
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp8").WithArguments("P.C2<int, string?>", "P.C2<int, string>", "p1", "void P.F10<C2<int, string>>(C2<int, string> p1)").WithLocation(46, 28),
+                // (57,9): error CS0411: The type arguments for method 'P.F10<T1>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F10<Nullable<_>>(1);
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F10<Nullable<_>>").WithArguments("P.F10<T1>(T1)").WithLocation(57, 9)
+            });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methodCalls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            var callsites = new[] {
+                "void P.F8<System.Int32, System.String!>(System.String? p2)",
+                "void P.F8<System.Int32, System.String!>(System.String? p2)",
+                "void P.F8<System.Int32?, System.String!>(System.String? p2)",
+                "void P.F8<System.Int32?, System.String!>(System.String? p2)",
+                "void P.F9<System.Int32, System.String!>(System.String! p2)",
+                "void P.F9<System.Int32, System.String!>(System.String! p2)",
+                "void P.F9<System.Int32?, System.String!>(System.String! p2)",
+                "void P.F9<System.Int32?, System.String!>(System.String! p2)",
+                "void P.F10<P.I2<System.Int32, System.String?>!>(P.I2<System.Int32, System.String?>! p1)",
+                "void P.F10<P.C2<System.Int32, System.String?>!>(P.C2<System.Int32, System.String?>! p1)",
+                "void P.F10<P.I2<System.Int32, System.String!>!>(P.I2<System.Int32, System.String!>! p1)",
+                "void P.F10<P.C2<System.Int32, System.String!>!>(P.C2<System.Int32, System.String!>! p1)",
+                "void P.F10<P.I2<System.Int32, System.String?>!>(P.I2<System.Int32, System.String?>! p1)",
+                "void P.F10<P.C2<System.Int32, System.String?>!>(P.C2<System.Int32, System.String?>! p1)",
+                "void P.F10<P.I2<System.Int32, System.String!>!>(P.I2<System.Int32, System.String!>! p1)",
+                "void P.F10<P.C2<System.Int32, System.String!>!>(P.C2<System.Int32, System.String!>! p1)",
+                "void P.F10<P.I2<System.String!, System.Int32>!>(P.I2<System.String!, System.Int32>! p1)",
+                "void P.F10<System.String?>(System.String? p1)",
+                "void P.F10<P.I2<System.Int32, System.String?>!>(P.I2<System.Int32, System.String?>! p1)",
+                "void P.F10<System.Int32>(System.Int32 p1)",
+                null,
+                };
+
+            CheckCallSites(model, methodCalls, callsites);
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_Simple()

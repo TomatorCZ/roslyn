@@ -1199,7 +1199,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             return new BoundCall(node, receiver, method, args, argNames, argRefKinds, isDelegateCall: isDelegateCall,
                         expanded: expanded, invokedAsExtensionMethod: invokedAsExtensionMethod,
-                        argsToParamsOpt: argsToParams, defaultArguments, resultKind: LookupResultKind.Viable, type: returnType, hasErrors: gotError);
+                        argsToParamsOpt: argsToParams, defaultArguments, resultKind: LookupResultKind.Viable, originalMethodsOpt: default, originalTypeArgsOpt: methodGroup.TypeArguments.ToImmutable(),type: returnType, hasErrors: gotError);
         }
 
 #nullable enable

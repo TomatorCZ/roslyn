@@ -6290,9 +6290,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // Re-infer method type parameters
                 if (method?.IsGenericMethod == true)
                 {
-                    if (HasImplicitTypeArguments(node))
+                    if ((node is BoundCall { } call && !call.OriginalTypeArgsOpt.IsDefault && call.OriginalTypeArgsOpt.Any(OverloadResolution.IsInferredType)) 
+                        || HasImplicitTypeArguments(node))
                     {
-                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded);
+                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded, (node as BoundCall)?.OriginalTypeArgsOpt ?? default);
                         parametersOpt = method.Parameters;
                     }
                     if (ConstraintsHelper.RequiresChecking(method))
@@ -7101,7 +7102,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<BoundExpression> arguments,
             ImmutableArray<RefKind> argumentRefKindsOpt,
             ImmutableArray<int> argsToParamsOpt,
-            bool expanded)
+            bool expanded,
+            ImmutableArray<TypeWithAnnotations> hints = default)
         {
             Debug.Assert(method.IsGenericMethod);
 
@@ -7133,7 +7135,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             refKinds.Free();
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
-            var result = MethodTypeInferrer.Infer(
+            TypeInferenceResult result;
+
+            if (!hints.IsDefault)
+            {
+                result = TypeInferrer.InferMethod(
                 _binder,
                 _conversions,
                 definition.TypeParameters,
@@ -7142,7 +7148,34 @@ namespace Microsoft.CodeAnalysis.CSharp
                 parameterRefKinds,
                 arguments,
                 ref discardedUseSiteInfo,
-                new MethodInferenceExtensions(this));
+                OverloadResolution.GetInferredSymbols(hints),
+                hints,
+                new InferenceExtensions(this));
+            }
+            else
+            {
+                result = TypeInferrer.InferMethod(
+                    _binder,
+                    _conversions,
+                    definition.TypeParameters,
+                    definition.ContainingType,
+                    parameterTypes,
+                    parameterRefKinds,
+                    arguments,
+                    ref discardedUseSiteInfo,
+                    extensions: new InferenceExtensions(this));
+            }
+
+            //var result = MethodTypeInferrer.Infer(
+            //    _binder,
+            //    _conversions,
+            //    definition.TypeParameters,
+            //    definition.ContainingType,
+            //    parameterTypes,
+            //    parameterRefKinds,
+            //    arguments,
+            //    ref discardedUseSiteInfo,
+            //    new MethodInferenceExtensions(this));
 
             if (!result.Success)
             {
@@ -7150,6 +7183,60 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             return definition.Construct(result.InferredTypeArguments);
+        }
+
+        private sealed class InferenceExtensions : TypeInferrer.Extensions
+        {
+            private readonly NullableWalker _walker;
+
+            internal InferenceExtensions(NullableWalker walker)
+            {
+                _walker = walker;
+            }
+
+            internal override TypeWithAnnotations GetTypeWithAnnotations(BoundExpression expr)
+            {
+                return TypeWithAnnotations.Create(expr.GetTypeOrFunctionType(), GetNullableAnnotation(expr));
+            }
+
+            /// <summary>
+            /// Return top-level nullability for the expression. This method should be called on a limited
+            /// set of expressions only. It should not be called on expressions tracked by flow analysis
+            /// other than <see cref="BoundKind.ExpressionWithNullability"/> which is an expression
+            /// specifically created in NullableWalker to represent the flow analysis state.
+            /// </summary>
+            private static NullableAnnotation GetNullableAnnotation(BoundExpression expr)
+            {
+                switch (expr.Kind)
+                {
+                    case BoundKind.DefaultLiteral:
+                    case BoundKind.DefaultExpression:
+                    case BoundKind.Literal:
+                        return expr.ConstantValueOpt == ConstantValue.NotAvailable || !expr.ConstantValueOpt.IsNull || expr.IsSuppressed ? NullableAnnotation.NotAnnotated : NullableAnnotation.Annotated;
+                    case BoundKind.ExpressionWithNullability:
+                        return ((BoundExpressionWithNullability)expr).NullableAnnotation;
+                    case BoundKind.MethodGroup:
+                    case BoundKind.UnboundLambda:
+                    case BoundKind.UnconvertedObjectCreationExpression:
+                    case BoundKind.ConvertedTupleLiteral:
+                        return NullableAnnotation.NotAnnotated;
+                    default:
+                        Debug.Assert(false); // unexpected value
+                        return NullableAnnotation.Oblivious;
+                }
+            }
+
+            internal override TypeWithAnnotations GetMethodGroupResultType(BoundMethodGroup group, MethodSymbol method)
+            {
+                if (_walker.TryGetMethodGroupReceiverNullability(group.ReceiverOpt, out TypeWithState receiverType))
+                {
+                    if (!method.IsStatic)
+                    {
+                        method = (MethodSymbol)AsMemberOfType(receiverType.Type, method);
+                    }
+                }
+                return method.ReturnTypeWithAnnotations;
+            }
         }
 
         private sealed class MethodInferenceExtensions : MethodTypeInferrer.Extensions

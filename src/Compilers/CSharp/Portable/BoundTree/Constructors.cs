@@ -96,7 +96,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             LookupResultKind resultKind,
             TypeSymbol type,
             bool hasErrors = false) :
-            this(syntax, receiverOpt, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, originalMethodsOpt: default, type, hasErrors)
+            this(syntax, receiverOpt, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, originalMethodsOpt: default, originalTypeArgsOpt: default, type, hasErrors)
         {
         }
 
@@ -112,7 +112,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                                 BitVector defaultArguments,
                                 LookupResultKind resultKind,
                                 TypeSymbol type)
-            => Update(receiverOpt, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, this.OriginalMethodsOpt, type);
+            => Update(receiverOpt, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, this.OriginalMethodsOpt, OriginalTypeArgsOpt, type);
 
         public static BoundCall ErrorCall(
             SyntaxNode node,
@@ -146,18 +146,19 @@ namespace Microsoft.CodeAnalysis.CSharp
                 defaultArguments: default(BitVector),
                 resultKind: resultKind,
                 originalMethodsOpt: originalMethods,
+                originalTypeArgsOpt: default,
                 type: method.ReturnType,
                 hasErrors: true);
         }
 
         public BoundCall Update(ImmutableArray<BoundExpression> arguments)
         {
-            return this.Update(ReceiverOpt, Method, arguments, ArgumentNamesOpt, ArgumentRefKindsOpt, IsDelegateCall, Expanded, InvokedAsExtensionMethod, ArgsToParamsOpt, DefaultArguments, ResultKind, OriginalMethodsOpt, Type);
+            return this.Update(ReceiverOpt, Method, arguments, ArgumentNamesOpt, ArgumentRefKindsOpt, IsDelegateCall, Expanded, InvokedAsExtensionMethod, ArgsToParamsOpt, DefaultArguments, ResultKind, OriginalMethodsOpt, OriginalTypeArgsOpt, Type);
         }
 
         public BoundCall Update(BoundExpression? receiverOpt, MethodSymbol method, ImmutableArray<BoundExpression> arguments)
         {
-            return this.Update(receiverOpt, method, arguments, ArgumentNamesOpt, ArgumentRefKindsOpt, IsDelegateCall, Expanded, InvokedAsExtensionMethod, ArgsToParamsOpt, DefaultArguments, ResultKind, OriginalMethodsOpt, Type);
+            return this.Update(receiverOpt, method, arguments, ArgumentNamesOpt, ArgumentRefKindsOpt, IsDelegateCall, Expanded, InvokedAsExtensionMethod, ArgsToParamsOpt, DefaultArguments, ResultKind, OriginalMethodsOpt, OriginalTypeArgsOpt, Type);
         }
 
         public static BoundCall Synthesized(SyntaxNode syntax, BoundExpression? receiverOpt, MethodSymbol method)
@@ -190,6 +191,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     defaultArguments: default(BitVector),
                     resultKind: LookupResultKind.Viable,
                     originalMethodsOpt: default,
+                    originalTypeArgsOpt: default,
                     type: method.ReturnType,
                     hasErrors: method.OriginalDefinition is ErrorMethodSymbol
                 )

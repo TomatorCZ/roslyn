@@ -1798,6 +1798,7 @@
         Only kept in the tree if the call was an error and overload resolution
         was unable to choose a best method.-->
     <Field Name="OriginalMethodsOpt" Type="ImmutableArray&lt;MethodSymbol&gt;" Null="Allow" SkipInNullabilityRewriter="true"/>
+    <Field Name="OriginalTypeArgsOpt" Type="ImmutableArray&lt;TypeWithAnnotations&gt;" Null="Allow" SkipInNullabilityRewriter="true"/>
   </Node>
 
   <Node Name="BoundEventAssignmentOperator" Base="BoundExpression">

@@ -3455,7 +3455,7 @@ outerDefault:
             return false;
         }
 
-        private static ImmutableArray<SourceInferredTypeSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList)
+        public static ImmutableArray<SourceInferredTypeSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList)
         {
             var inferredArguments = ArrayBuilder<SourceInferredTypeSymbol>.GetInstance();
             for (int i = 0; i < typeArgumentList.Length; i++)

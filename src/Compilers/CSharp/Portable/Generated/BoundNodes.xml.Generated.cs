@@ -6029,7 +6029,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
     internal sealed partial class BoundCall : BoundExpression
     {
-        public BoundCall(SyntaxNode syntax, BoundExpression? receiverOpt, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, TypeSymbol type, bool hasErrors = false)
+        public BoundCall(SyntaxNode syntax, BoundExpression? receiverOpt, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, ImmutableArray<TypeWithAnnotations> originalTypeArgsOpt, TypeSymbol type, bool hasErrors = false)
             : base(BoundKind.Call, syntax, type, hasErrors || receiverOpt.HasErrors() || arguments.HasErrors())
         {
 
@@ -6049,6 +6049,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             this.DefaultArguments = defaultArguments;
             this.ResultKind = resultKind;
             this.OriginalMethodsOpt = originalMethodsOpt;
+            this.OriginalTypeArgsOpt = originalTypeArgsOpt;
         }
 
         public new TypeSymbol Type => base.Type!;
@@ -6064,15 +6065,16 @@ namespace Microsoft.CodeAnalysis.CSharp
         public BitVector DefaultArguments { get; }
         public override LookupResultKind ResultKind { get; }
         public ImmutableArray<MethodSymbol> OriginalMethodsOpt { get; }
+        public ImmutableArray<TypeWithAnnotations> OriginalTypeArgsOpt { get; }
 
         [DebuggerStepThrough]
         public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitCall(this);
 
-        public BoundCall Update(BoundExpression? receiverOpt, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, TypeSymbol type)
+        public BoundCall Update(BoundExpression? receiverOpt, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, ImmutableArray<TypeWithAnnotations> originalTypeArgsOpt, TypeSymbol type)
         {
-            if (receiverOpt != this.ReceiverOpt || !Symbols.SymbolEqualityComparer.ConsiderEverything.Equals(method, this.Method) || arguments != this.Arguments || argumentNamesOpt != this.ArgumentNamesOpt || argumentRefKindsOpt != this.ArgumentRefKindsOpt || isDelegateCall != this.IsDelegateCall || expanded != this.Expanded || invokedAsExtensionMethod != this.InvokedAsExtensionMethod || argsToParamsOpt != this.ArgsToParamsOpt || defaultArguments != this.DefaultArguments || resultKind != this.ResultKind || originalMethodsOpt != this.OriginalMethodsOpt || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
+            if (receiverOpt != this.ReceiverOpt || !Symbols.SymbolEqualityComparer.ConsiderEverything.Equals(method, this.Method) || arguments != this.Arguments || argumentNamesOpt != this.ArgumentNamesOpt || argumentRefKindsOpt != this.ArgumentRefKindsOpt || isDelegateCall != this.IsDelegateCall || expanded != this.Expanded || invokedAsExtensionMethod != this.InvokedAsExtensionMethod || argsToParamsOpt != this.ArgsToParamsOpt || defaultArguments != this.DefaultArguments || resultKind != this.ResultKind || originalMethodsOpt != this.OriginalMethodsOpt || originalTypeArgsOpt != this.OriginalTypeArgsOpt || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
             {
-                var result = new BoundCall(this.Syntax, receiverOpt, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, originalMethodsOpt, type, this.HasErrors);
+                var result = new BoundCall(this.Syntax, receiverOpt, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, originalMethodsOpt, originalTypeArgsOpt, type, this.HasErrors);
                 result.CopyAttributes(this);
                 return result;
             }
@@ -11344,7 +11346,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression? receiverOpt = (BoundExpression?)this.Visit(node.ReceiverOpt);
             ImmutableArray<BoundExpression> arguments = this.VisitList(node.Arguments);
             TypeSymbol? type = this.VisitType(node.Type);
-            return node.Update(receiverOpt, node.Method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, type);
+            return node.Update(receiverOpt, node.Method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.OriginalTypeArgsOpt, type);
         }
         public override BoundNode? VisitEventAssignmentOperator(BoundEventAssignmentOperator node)
         {
@@ -13468,12 +13470,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
             {
-                updatedNode = node.Update(receiverOpt, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, infoAndType.Type!);
+                updatedNode = node.Update(receiverOpt, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.OriginalTypeArgsOpt, infoAndType.Type!);
                 updatedNode.TopLevelNullability = infoAndType.Info;
             }
             else
             {
-                updatedNode = node.Update(receiverOpt, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.Type);
+                updatedNode = node.Update(receiverOpt, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.OriginalTypeArgsOpt, node.Type);
             }
             return updatedNode;
         }
@@ -15834,6 +15836,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             new TreeDumperNode("defaultArguments", node.DefaultArguments, null),
             new TreeDumperNode("resultKind", node.ResultKind, null),
             new TreeDumperNode("originalMethodsOpt", node.OriginalMethodsOpt, null),
+            new TreeDumperNode("originalTypeArgsOpt", node.OriginalTypeArgsOpt, null),
             new TreeDumperNode("type", node.Type, null),
             new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
             new TreeDumperNode("hasErrors", node.HasErrors, null)
