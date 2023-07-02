@@ -613,6 +613,18 @@ namespace Microsoft.CodeAnalysis.CSharp
             return false;
         }
 
+        private static BoundMethodGroup ConvertInferredTypeArgsToGenericVersion(BoundMethodGroup group) 
+        {
+            if (!group.TypeArgumentsOpt.IsDefault && group.TypeArgumentsOpt.Any(OverloadResolution.IsInferredType))
+            {
+                return group.Update(default, group.Name, group.Methods, group.LookupSymbolOpt, group.LookupError, group.Flags, group.FunctionType, group.ReceiverOpt, group.ResultKind);
+            }
+            else
+            {
+                return group;
+            }
+        } 
+
         private BoundExpression BindMethodGroupInvocation(
             SyntaxNode syntax,
             SyntaxNode expression,
@@ -700,7 +712,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         if (resolution.IsLocalFunctionInvocation)
                         {
                             result = BindLocalFunctionInvocationWithDynamicArgument(
-                                syntax, expression, methodName, methodGroup,
+                                syntax, expression, methodName, ConvertInferredTypeArgsToGenericVersion(methodGroup),
                                 diagnostics, queryClause, resolution);
                         }
                         else if (resolution.IsExtensionMethodGroup)
@@ -736,7 +748,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                                                                                                 diagnostics);
                             if (finalApplicableCandidates.Length > 0)
                             {
-                                result = BindDynamicInvocation(syntax, methodGroup, resolution.AnalyzedArguments, finalApplicableCandidates, diagnostics, queryClause);
+                                result = BindDynamicInvocation(syntax, ConvertInferredTypeArgsToGenericVersion(methodGroup), resolution.AnalyzedArguments, finalApplicableCandidates, diagnostics, queryClause);
                             }
                             else
                             {

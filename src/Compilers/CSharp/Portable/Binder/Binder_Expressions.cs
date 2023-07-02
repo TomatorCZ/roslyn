@@ -4499,7 +4499,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
                 }
 
-                if ( type.TypeKind == TypeKindInternal.InferredType 
+                if (type.TypeKind == TypeKindInternal.InferredType
                 || (type.TypeKind == TypeKind.Delegate && ((NamedTypeSymbol)type).TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(OverloadResolution.IsInferredType)))
                 {
                     save.Clear();
@@ -4512,8 +4512,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                         save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
                     }
                 }
-                
-                
+
+
                 diagnostics.AddRangeAndFree(save);
 
                 switch (type.TypeKind)
@@ -5747,8 +5747,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 {
                     Error(diagnostics, ErrorCode.ERR_TypeHintsInDynamicObjectCreation, node);
                 }
-
-                if (overloadResolutionResult.HasAnyApplicableMember)
+                else if (overloadResolutionResult.HasAnyApplicableMember)
                 {
                     var argArray = BuildArgumentsForDynamicInvocation(analyzedArguments, diagnostics);
                     var refKindsArray = analyzedArguments.RefKinds.ToImmutableOrNull();
@@ -5787,7 +5786,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     out ImmutableArray<MethodSymbol> candidateConstructors,
                     allowProtectedConstructorsOfBaseType: false,
                     suppressUnsupportedRequiredMembersError: false) &&
-                !type.IsAbstract)
+                !type.IsAbstract && !analyzedArguments.HasDynamicArgument)
             {
                 var method = memberResolutionResult.Member;
                 type = method.ContainingType;
