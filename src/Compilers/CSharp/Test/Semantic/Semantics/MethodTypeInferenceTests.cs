@@ -1878,7 +1878,39 @@ class P
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_Dynamic()
-        { }
+        { 
+            var source = """
+class P {
+    void M1() 
+    {
+        dynamic temp4 = "";
+            
+        // Inferred: [T1 = int] Error: T1 = string & int
+        new F7<string, _>("", temp4, 1);
+                    
+        // Inferred: [T1 = int] Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        new F7<_, string>(1, temp4, 1);
+    }
+            
+    class F7<T1, T2>{ public F7(T1 p1, T2 p2, T1 p3) {} }
+}
+""";
+
+            var compilation = CreateCompilation(
+                   source,
+                   parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (7,9): warning CS9163: Type hints will not be considered in dynamic call.
+                //         new F7<string, _>("", temp4, 1);
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, @"new F7<string, _>("""", temp4, 1)").WithLocation(7, 9),
+                // (7,38): error CS1503: Argument 3: cannot convert from 'int' to 'string'
+                //         new F7<string, _>("", temp4, 1);
+                Diagnostic(ErrorCode.ERR_BadArgType, "1").WithArguments("3", "int", "string").WithLocation(7, 38),
+                // (10,9): warning CS9163: Type hints will not be considered in dynamic call.
+                //         new F7<_, string>(1, temp4, 1);
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, "new F7<_, string>(1, temp4, 1)").WithLocation(10, 9)
+            });
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_ErrorRecovery()

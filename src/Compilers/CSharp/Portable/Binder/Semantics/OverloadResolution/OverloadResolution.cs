@@ -3723,28 +3723,24 @@ outerDefault:
             {
                 if (arguments.HasDynamicArgument)
                 {
-                    throw new System.Exception();
-                    //ignoreOpenTypes = true;
+                    ignoreOpenTypes = true;
 
-                    //if (typeArgumentsBuilder.Any(IsInferredType))
-                    //{
-                    //    var sub = typeArgumentsBuilder.SelectAsArray(
-                    //        (x, index) => IsInferredType(x)
-                    //        ? TypeWithAnnotations.Create(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters[index])
-                    //        : x);
-
-                    //    var map = new TypeMap(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters, sub);
-
-                    //    member = (TMember)(Symbol)method.Construct(sub);
-                    //    leastOverriddenMember = (TMember)(Symbol)((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.Construct(sub);
-
-
-                    //    effectiveParameters = new EffectiveParameters(map.SubstituteTypes(constructedEffectiveParameters.ParameterTypes), constructedEffectiveParameters.ParameterRefKinds);
-                    //}
-                    //else
-                    //{
-                    //    effectiveParameters = constructedEffectiveParameters;
-                    //}
+                    if (contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType))
+                    {
+                        var sub = contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.SelectAsArray(
+                            (x, index) => IsInferredType(x)
+                            ? TypeWithAnnotations.Create(contatiningType.ConstructedFrom.TypeParameters[index])
+                            : x);
+                        NamedTypeSymbol genericType = contatiningType.OriginalDefinition;
+                        NamedTypeSymbol inferredType = genericType.Construct(sub);
+                        constructor = inferredType.Constructors.First(x => x.OriginalDefinition == constructor.OriginalDefinition);
+                        var map = new TypeMap(contatiningType.ConstructedFrom.TypeParameters, sub);
+                        effectiveParameters = new EffectiveParameters(map.SubstituteTypes(parameters.ParameterTypes), parameters.ParameterRefKinds);
+                    }
+                    else
+                    {
+                        effectiveParameters = parameters;
+                    }
                 }
                 else
                 {

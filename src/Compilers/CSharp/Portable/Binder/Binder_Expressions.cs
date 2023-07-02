@@ -5742,6 +5742,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                 diagnostics.Add(node, useSiteInfo);
                 useSiteInfo = new CompoundUseSiteInfo<AssemblySymbol>(useSiteInfo);
 
+                if (!type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.IsDefault
+                    && type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(OverloadResolution.IsInferredType))
+                {
+                    Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, node);
+                }
+
                 if (overloadResolutionResult.HasAnyApplicableMember)
                 {
                     var argArray = BuildArgumentsForDynamicInvocation(analyzedArguments, diagnostics);

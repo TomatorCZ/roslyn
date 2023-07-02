@@ -1120,7 +1120,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         {
             RoslynDebug.Assert((object)parameterContainer != null);
 
-            var result = type.VisitType(s_isTypeParameterWithSpecificContainerPredicate, parameterContainer.TypeParameters);
+            var result = type.VisitType(s_isTypeParameterWithSpecificContainerPredicate, parameterContainer.IsConstructor() ? parameterContainer.ContainingType.TypeParameters : parameterContainer.TypeParameters);
             return result is object;
         }
 
