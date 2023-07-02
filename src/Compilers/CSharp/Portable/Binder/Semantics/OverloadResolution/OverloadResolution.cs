@@ -3769,7 +3769,7 @@ outerDefault:
                     {
                         hasTypeArgumentsInferredFromFunctionType = false;
                         inferenceError = MemberAnalysisResult.TypeInferenceFailed();
-                        return new MemberResolutionResult<MethodSymbol>(constructor, constructor, inferenceError, false);
+                        return new MemberResolutionResult<MethodSymbol>(constructor.OriginalDefinition, constructor.OriginalDefinition, inferenceError, false);
                     }
 
                     NamedTypeSymbol inferredType = genericType.Construct(inferenceResult.InferredTypeArguments);

@@ -1453,7 +1453,6 @@ class P {
     }
 
     void F7<T1, T2>(T1 p1, T2 p2, T1 p3) {}
-    void F8<T1>(T1 p1, int p2) {}
 }
 """;
 
@@ -1912,9 +1911,37 @@ class P {
             });
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_ErrorRecovery()
-        { }
+        {
+            var source = """
+class P {
+    void M1() 
+    {
+        new F1<_,_>(""); // Error: Can't infer T2
+        new F1<int, string>(""); // Error: int != string
+        new F1<byte,_>(257); // Error: Can't infer T2
+    }
+
+    class F1<T1, T2>{ public F1(T1 p1) {} }
+}
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                    // (4,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                    //         new F1<_,_>(""); // Error: Can't infer T2
+                    Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(4, 13),
+                    // (5,29): error CS1503: Argument 1: cannot convert from 'string' to 'int'
+                    //         new F1<int, string>(""); // Error: int != string
+                    Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 29),
+                    // (6,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                    //         new F1<byte,_>(257); // Error: Can't infer T2
+                    Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(6, 13)
+            });
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_Nullable()
