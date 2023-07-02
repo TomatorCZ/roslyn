@@ -1822,6 +1822,11 @@
         <target state="translated">"class"、"struct"、"unmanaged"、"notnull" 和 "default" 约束不能组合或重复，并且必须先在约束列表中进行指定。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">“{0}”不是内插字符串处理程序类型。</target>

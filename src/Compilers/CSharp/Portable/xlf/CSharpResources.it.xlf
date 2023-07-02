@@ -1822,6 +1822,11 @@
         <target state="translated">I vincoli 'class', 'struct', 'unmanaged', 'notnull' e 'default' non possono essere combinati o duplicati e devono essere specificati per primi nell'elenco di vincoli.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">'{0}' non è un tipo di gestore di stringhe interpolate.</target>

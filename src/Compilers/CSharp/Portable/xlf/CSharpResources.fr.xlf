@@ -1822,6 +1822,11 @@
         <target state="translated">Les contraintes 'class', 'struct', 'unmanaged', 'notnull' et 'default' ne peuvent pas être combinées ou dupliquées. De plus, elles doivent être spécifiées en premier dans la liste des contraintes.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">« {0} » n’est pas un type de gestionnaire de chaîne interpolé.</target>

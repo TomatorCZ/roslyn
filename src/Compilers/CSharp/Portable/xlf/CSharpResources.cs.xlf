@@ -1822,6 +1822,11 @@
         <target state="translated">Omezení class, struct, unmanaged, notnull a default se nedají kombinovat ani použít více než jednou a v seznamu omezení se musí zadat jako první.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">{0} není typ obslužné rutiny interpolovaného řetězce.</target>

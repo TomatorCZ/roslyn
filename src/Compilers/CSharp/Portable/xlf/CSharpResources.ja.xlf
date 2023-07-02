@@ -1822,6 +1822,11 @@
         <target state="translated">'class'、'struct'、'unmanaged'、'notnull'、'default' の制約を組み合わせたり、複製したりすることはできません。これらは制約リストの最初に指定する必要があります。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">'{0}' は、補間された文字列ハンドラー型ではありません。</target>

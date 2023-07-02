@@ -7613,4 +7613,7 @@ To remove the warning, you can use /reference instead (set the Embed Interop Typ
   <data name="WRN_TypeHintsInDynamicCall" xml:space="preserve">
     <value>Type hints will not be considered in dynamic call.</value>
   </data>
+  <data name="ERR_TypeHintsInDynamicObjectCreation" xml:space="preserve">
+    <value>Can't use inferred type arguments in object creation containing dynamic arguments</value>
+  </data>
 </root>

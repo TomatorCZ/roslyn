@@ -1822,6 +1822,11 @@
         <target state="translated">'class', 'struct', 'unmanaged', 'notnull' 및 'default' 제약 조건은 결합되거나 중복될 수 없으며 제약 조건 목록에서 먼저 지정되어야 합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">'{0}'은(는) 보간된 문자열 처리기 유형이 아닙니다.</target>

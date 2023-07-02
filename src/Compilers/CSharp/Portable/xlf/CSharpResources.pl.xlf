@@ -1822,6 +1822,11 @@
         <target state="translated">Ograniczeń „class”, „struct”, „unmanaged”, „notnull” i „default” nie można łączyć ani duplikować i należy je najpierw określić na liście ograniczeń.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">„{0}” nie jest interpolowanym typem obsługi ciągu.</target>

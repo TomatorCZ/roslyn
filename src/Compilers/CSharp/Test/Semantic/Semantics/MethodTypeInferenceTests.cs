@@ -1876,7 +1876,7 @@ class P
         public void PartialObjectCreationTypeInference_Complex() 
         { }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_Dynamic()
         { 
             var source = """
@@ -1900,15 +1900,15 @@ class P {
                    source,
                    parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
             compilation.VerifyDiagnostics(new[] {
-                // (7,9): warning CS9163: Type hints will not be considered in dynamic call.
+                // (7,9): error CS9164: Can't use inferred type arguments in object creation containing dynamic arguments
                 //         new F7<string, _>("", temp4, 1);
-                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, @"new F7<string, _>("""", temp4, 1)").WithLocation(7, 9),
+                Diagnostic(ErrorCode.ERR_TypeHintsInDynamicObjectCreation, @"new F7<string, _>("""", temp4, 1)").WithLocation(7, 9),
                 // (7,38): error CS1503: Argument 3: cannot convert from 'int' to 'string'
                 //         new F7<string, _>("", temp4, 1);
                 Diagnostic(ErrorCode.ERR_BadArgType, "1").WithArguments("3", "int", "string").WithLocation(7, 38),
-                // (10,9): warning CS9163: Type hints will not be considered in dynamic call.
+                // (10,9): error CS9164: Can't use inferred type arguments in object creation containing dynamic arguments
                 //         new F7<_, string>(1, temp4, 1);
-                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, "new F7<_, string>(1, temp4, 1)").WithLocation(10, 9)
+                Diagnostic(ErrorCode.ERR_TypeHintsInDynamicObjectCreation, "new F7<_, string>(1, temp4, 1)").WithLocation(10, 9)
             });
         }
 

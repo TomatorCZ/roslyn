@@ -5745,7 +5745,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 if (!type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.IsDefault
                     && type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(OverloadResolution.IsInferredType))
                 {
-                    Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, node);
+                    Error(diagnostics, ErrorCode.ERR_TypeHintsInDynamicObjectCreation, node);
                 }
 
                 if (overloadResolutionResult.HasAnyApplicableMember)

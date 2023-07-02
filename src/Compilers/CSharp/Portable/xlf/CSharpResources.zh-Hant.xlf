@@ -1822,6 +1822,11 @@
         <target state="translated">無法合併或複製 'class'、'struct'、'unmanaged'、'notnull' 以及 'default' 條件約束，而且必須先在條件約束清單中指定。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">'{0}' 不是差補字串處理常式類型。</target>
