@@ -4489,14 +4489,32 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             BoundExpression bindObjectCreationExpression(ObjectCreationExpressionSyntax node, BindingDiagnosticBag diagnostics)
             {
-                var typeWithAnnotations = BindType(node.Type, diagnostics);
+                var save = BindingDiagnosticBag.GetInstance(diagnostics.AccumulatesDiagnostics, diagnostics.AccumulatesDependencies);
+                var typeWithAnnotations = BindType(node.Type, save, allowInfrredType: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialConstructorTypeInference));
                 var type = typeWithAnnotations.Type;
                 var originalType = type;
 
                 if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
                 {
-                    diagnostics.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
+                    save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
                 }
+
+                if ( type.TypeKind == TypeKindInternal.InferredType 
+                || (type.TypeKind == TypeKind.Delegate && ((NamedTypeSymbol)type).TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(OverloadResolution.IsInferredType)))
+                {
+                    save.Clear();
+                    typeWithAnnotations = BindType(node.Type, save);
+                    type = typeWithAnnotations.Type;
+                    originalType = type;
+
+                    if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
+                    {
+                        save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
+                    }
+                }
+
+                
+                diagnostics.AddRangeAndFree(save);
 
                 switch (type.TypeKind)
                 {

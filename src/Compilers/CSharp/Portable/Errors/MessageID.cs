@@ -273,7 +273,8 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         IDS_FeatureInstanceMemberInNameof = MessageBase + 12835,
 
-        IDS_FeaturePartialMethodTypeInference = MessageBase + 12835,
+        IDS_FeaturePartialMethodTypeInference = MessageBase + 12836,
+        IDS_FeaturePartialConstructorTypeInference = MessageBase + 12837,
     }
 
     // Message IDs may refer to strings that need to be localized.
@@ -320,6 +321,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 case MessageID.IDS_FeaturePartialMethodTypeInference:
                     return nameof(MessageID.IDS_FeaturePartialMethodTypeInference);
+                case MessageID.IDS_FeaturePartialConstructorTypeInference:
+                    return nameof(MessageID.IDS_FeaturePartialConstructorTypeInference);
                 default:
                     return null;
             }

@@ -1365,18 +1365,18 @@ public class P
             CheckCallSites(model, methodCalls, callsites);
         }
 
-        private static void CheckCallSites(SemanticModel model, InvocationExpressionSyntax[] invocations, string[] callsites)
+        private static void CheckCallSites<T>(SemanticModel model, T[] nodes, string[] callsites) where T : SyntaxNode
         {
-            Assert.Equal(callsites.Length, invocations.Length);
-            for (int i = 0; i < invocations.Length; i++)
-                CheckCallSite(model, invocations[i], callsites[i]);
+            Assert.Equal(callsites.Length, nodes.Length);
+            for (int i = 0; i < nodes.Length; i++)
+                CheckCallSite(model, nodes[i], callsites[i]);
         }
 
-        private static void CheckCallSite(SemanticModel model, InvocationExpressionSyntax invocation, string callsite)
+        private static void CheckCallSite<T>(SemanticModel model, T node, string callsite) where T : SyntaxNode
         {
-            Assert.Null(model.GetDeclaredSymbol(invocation));
-            Assert.NotNull(model.GetTypeInfo(invocation).Type);
-            var symbol = model.GetSymbolInfo(invocation).Symbol as Symbols.PublicModel.MethodSymbol;
+            Assert.Null(model.GetDeclaredSymbol(node));
+            Assert.NotNull(model.GetTypeInfo(node).Type);
+            var symbol = model.GetSymbolInfo(node).Symbol as Symbols.PublicModel.MethodSymbol;
             if (symbol == null && callsite == null)
                 return;
             Assert.NotNull(symbol);
@@ -1635,7 +1635,112 @@ class P {
             CheckCallSites(model, methodCalls, callsites);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
+        public void PartialObjectCreationTypeInference_InferredType1()
+        {
+            var source = """
+class P
+{
+    static void M() 
+    {
+        A temp1 = null;
+        new F<_>(temp1);
+    }
+
+    class F<T> { public F(T p) {} }
+}
+
+class A {}
+class _ {}
+
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (6,18): error CS1503: Argument 1: cannot convert from 'A' to '_'
+                //         new F<_>(temp1);
+                Diagnostic(ErrorCode.ERR_BadArgType, "temp1").WithArguments("1", "A", "_").WithLocation(6, 18)
+            });
+        }
+
+        [Fact]
+        public void PartialObjectCreationTypeInference_InferredType2()
+        {
+            var source = """
+namespace X;
+#nullable enable
+
+class P
+{
+    static void M() 
+    {
+        A temp1 = new A();
+        new F<_>(temp1);
+        new P.F<_>(temp1);
+        new global::X.P.F<_>(temp1);
+
+        A? temp2 = null;
+        new F<_?>(temp2);
+
+        A<A?>? temp3 = null;
+        new F<A<_?>?>(temp3);
+
+        A.B<A> temp4 = new A.B<A>();
+        new F<global::X.P.A.B<_>>(temp4);
+        new F<A.B<_>>(temp4);
+
+        A[] temp5 = new A[1];
+        new F<_[]>(temp5);
+
+        A<A>[] temp6 = new A<A>[1];
+        new F<A<_>[]>(temp6);
+
+        var temp7 = (1, 1);
+        new F<(_, _)>(temp7);
+
+        new A<_>.F<_>(temp1); // Error
+        new _(); // Error
+        var temp8 = new Del<_>(Foo); //Error
+    }
+
+    class F<T> { public F(T p) {} }
+    class A 
+    {
+        public class B<T> {}
+    }
+    class A<T1> 
+    {
+        public class F<T2>{ public F(T2 p1) {} }
+    }
+
+    delegate T Del<T>(T p1);
+    int Foo(int p) {return p;}
+}
+
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new []{
+                // (32,15): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         new A<_>.F<_>(temp1); // Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(32, 15),
+                // (33,13): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         new _(); // Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(33, 13),
+                // (34,21): error CS0123: No overload for 'Foo' matches delegate 'P.Del<_>'
+                //         var temp8 = new Del<_>(Foo); //Error
+                Diagnostic(ErrorCode.ERR_MethDelegateMismatch, "new Del<_>(Foo)").WithArguments("Foo", "X.P.Del<_>").WithLocation(34, 21),
+                // (34,29): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         var temp8 = new Del<_>(Foo); //Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(34, 29)
+            });
+        }
+
+        [Fact]
         public void PartialObjectCreationTypeInference_Simple()
         { }
 
