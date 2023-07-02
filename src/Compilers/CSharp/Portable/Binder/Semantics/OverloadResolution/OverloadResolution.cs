@@ -739,13 +739,19 @@ outerDefault:
             }
 
             // If the constructor has a use site diagnostic, we don't want to discard it because we'll have to report the diagnostic later.
-            if (result.IsValid || completeResults || result.HasUseSiteDiagnosticToReportFor(constructor))
+            if (result.IsValid || completeResults || result.Result.HasUseSiteDiagnosticToReportFor(constructor))
             {
-                results.Add(new MemberResolutionResult<MethodSymbol>(constructor, constructor, result, hasTypeArgumentInferredFromFunctionType: false));
+                results.Add(result);
             }
         }
 
-        private MemberAnalysisResult IsConstructorApplicableInNormalForm(
+        private static bool IsConstructorInferred(MethodSymbol constructor) 
+        {
+            return (!constructor.ContainingType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.IsDefault
+                || constructor.ContainingType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType));
+        }
+
+        private MemberResolutionResult<MethodSymbol> IsConstructorApplicableInNormalForm(
             MethodSymbol constructor,
             AnalyzedArguments arguments,
             bool completeResults,
@@ -754,24 +760,24 @@ outerDefault:
             var argumentAnalysis = AnalyzeArguments(constructor, arguments, isMethodGroupConversion: false, expanded: false); // Constructors are never involved in method group conversion.
             if (!argumentAnalysis.IsValid)
             {
-                return MemberAnalysisResult.ArgumentParameterMismatch(argumentAnalysis);
+                return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.ArgumentParameterMismatch(argumentAnalysis), false);
             }
 
             // Check after argument analysis, but before more complicated type inference and argument type validation.
             if (constructor.HasUseSiteError)
             {
-                return MemberAnalysisResult.UseSiteError();
+                return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.UseSiteError(), false);
             }
 
             var effectiveParameters = GetEffectiveParametersInNormalForm(
-                constructor,
+                IsConstructorInferred(constructor) ? constructor.OriginalDefinition : constructor,
                 arguments.Arguments.Count,
                 argumentAnalysis.ArgsToParamsOpt,
                 arguments.RefKinds,
                 isMethodGroupConversion: false,
                 allowRefOmittedArguments: false);
 
-            return IsApplicable(
+            return IsConstructorApplicable(
                 constructor,
                 effectiveParameters,
                 arguments,
@@ -783,7 +789,7 @@ outerDefault:
                 useSiteInfo: ref useSiteInfo);
         }
 
-        private MemberAnalysisResult IsConstructorApplicableInExpandedForm(
+        private MemberResolutionResult<MethodSymbol> IsConstructorApplicableInExpandedForm(
             MethodSymbol constructor,
             AnalyzedArguments arguments,
             bool completeResults,
@@ -792,17 +798,17 @@ outerDefault:
             var argumentAnalysis = AnalyzeArguments(constructor, arguments, isMethodGroupConversion: false, expanded: true);
             if (!argumentAnalysis.IsValid)
             {
-                return MemberAnalysisResult.ArgumentParameterMismatch(argumentAnalysis);
+                return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.ArgumentParameterMismatch(argumentAnalysis), false);
             }
 
             // Check after argument analysis, but before more complicated type inference and argument type validation.
             if (constructor.HasUseSiteError)
             {
-                return MemberAnalysisResult.UseSiteError();
+                return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.UseSiteError(), false);
             }
 
             var effectiveParameters = GetEffectiveParametersInExpandedForm(
-                constructor,
+                IsConstructorInferred(constructor) ? constructor.OriginalDefinition : constructor,
                 arguments.Arguments.Count,
                 argumentAnalysis.ArgsToParamsOpt,
                 arguments.RefKinds,
@@ -812,7 +818,7 @@ outerDefault:
             // A vararg ctor is never applicable in its expanded form because
             // it is never a params method.
             Debug.Assert(!constructor.IsVararg);
-            var result = IsApplicable(
+            var result = IsConstructorApplicable(
                 constructor,
                 effectiveParameters,
                 arguments,
@@ -823,7 +829,7 @@ outerDefault:
                 completeResults: completeResults,
                 useSiteInfo: ref useSiteInfo);
 
-            return result.IsValid ? MemberAnalysisResult.ExpandedForm(result.ArgsToParamsOpt, result.ConversionsOpt, hasAnyRefOmittedArgument: false) : result;
+            return result.IsValid ? new MemberResolutionResult<MethodSymbol>(result.Member, result.LeastOverriddenMember, MemberAnalysisResult.ExpandedForm(result.Result.ArgsToParamsOpt, result.Result.ConversionsOpt, hasAnyRefOmittedArgument: false), false) : result;
         }
 
         private void AddMemberToCandidateSet<TMember>(
@@ -3696,6 +3702,119 @@ outerDefault:
             hasTypeArgumentsInferredFromFunctionType = false;
             error = MemberAnalysisResult.TypeInferenceFailed();
             return default(ImmutableArray<TypeWithAnnotations>);
+        }
+
+        private MemberResolutionResult<MethodSymbol> IsConstructorApplicable(
+            MethodSymbol constructor,
+            EffectiveParameters parameters,
+            AnalyzedArguments arguments,
+            ImmutableArray<int> argsToParameters,
+            bool isVararg,
+            bool hasAnyRefOmittedArgument,
+            bool ignoreOpenTypes,
+            bool completeResults,
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            NamedTypeSymbol contatiningType = constructor.ContainingType;
+            EffectiveParameters effectiveParameters;
+            bool hasTypeArgumentsInferredFromFunctionType = false;
+
+            if (contatiningType.Arity > 0 && contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType))
+            {
+                if (arguments.HasDynamicArgument)
+                {
+                    throw new System.Exception();
+                    //ignoreOpenTypes = true;
+
+                    //if (typeArgumentsBuilder.Any(IsInferredType))
+                    //{
+                    //    var sub = typeArgumentsBuilder.SelectAsArray(
+                    //        (x, index) => IsInferredType(x)
+                    //        ? TypeWithAnnotations.Create(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters[index])
+                    //        : x);
+
+                    //    var map = new TypeMap(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters, sub);
+
+                    //    member = (TMember)(Symbol)method.Construct(sub);
+                    //    leastOverriddenMember = (TMember)(Symbol)((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.Construct(sub);
+
+
+                    //    effectiveParameters = new EffectiveParameters(map.SubstituteTypes(constructedEffectiveParameters.ParameterTypes), constructedEffectiveParameters.ParameterRefKinds);
+                    //}
+                    //else
+                    //{
+                    //    effectiveParameters = constructedEffectiveParameters;
+                    //}
+                }
+                else
+                {
+                    NamedTypeSymbol genericType = contatiningType.OriginalDefinition;
+
+                    // infer generic type arguments:
+                    MemberAnalysisResult inferenceError;
+                    var inferenceResult = TypeInferrer.InferConstructor(
+                        _binder,
+                        _binder.Conversions,
+                        genericType.TypeParameters,
+                        genericType,
+                        parameters.ParameterTypes,
+                        parameters.ParameterRefKinds,
+                        arguments.Arguments.ToImmutable(),
+                        ref useSiteInfo,
+                        GetInferredSymbols(contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics),
+                        contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics);
+
+                    if (inferenceResult.Success)
+                    {
+                        hasTypeArgumentsInferredFromFunctionType = inferenceResult.HasTypeArgumentInferredFromFunctionType;
+                        inferenceError = default(MemberAnalysisResult);
+                    }
+                    else
+                    {
+                        hasTypeArgumentsInferredFromFunctionType = false;
+                        inferenceError = MemberAnalysisResult.TypeInferenceFailed();
+                        return new MemberResolutionResult<MethodSymbol>(constructor, constructor, inferenceError, false);
+                    }
+
+                    NamedTypeSymbol inferredType = genericType.Construct(inferenceResult.InferredTypeArguments);
+                    constructor = inferredType.Constructors.First(x => x.OriginalDefinition == constructor.OriginalDefinition);
+
+                    var parameterTypes = constructor.GetParameterTypes();
+                    for (int i = 0; i < parameterTypes.Length; i++)
+                    {
+                        if (!parameterTypes[i].Type.CheckAllConstraints(Compilation, Conversions))
+                        {
+                            return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.ConstructedParameterFailedConstraintsCheck(i), false);
+                        }
+                    }
+
+                    var map = new TypeMap(inferredType.TypeParameters, inferenceResult.InferredTypeArguments, allowAlpha: true);
+
+                    effectiveParameters = new EffectiveParameters(
+                        map.SubstituteTypes(parameters.ParameterTypes),
+                        parameters.ParameterRefKinds);
+
+                    ignoreOpenTypes = false;
+                }
+            }
+            else
+            {
+                effectiveParameters = parameters;
+                ignoreOpenTypes = false;
+            }
+
+            var applicableResult = IsApplicable(
+                constructor,
+                effectiveParameters,
+                arguments,
+                argsToParameters,
+                isVararg: isVararg,
+                hasAnyRefOmittedArgument: hasAnyRefOmittedArgument,
+                ignoreOpenTypes: ignoreOpenTypes,
+                completeResults: completeResults,
+                useSiteInfo: ref useSiteInfo);
+
+            return new MemberResolutionResult<MethodSymbol>(constructor, constructor, applicableResult, hasTypeArgumentsInferredFromFunctionType);
         }
 
         private MemberAnalysisResult IsApplicable(

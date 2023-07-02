@@ -185,6 +185,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return true;
 
                 case SymbolKind.TypeParameter:
+                case SymbolKindInternal.InferredType:
                 case SymbolKind.Parameter:
                 case SymbolKind.Local:
                 case SymbolKind.Label:

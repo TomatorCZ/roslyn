@@ -4512,7 +4512,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
                     }
                 }
-
+                
                 
                 diagnostics.AddRangeAndFree(save);
 
@@ -5784,6 +5784,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 !type.IsAbstract)
             {
                 var method = memberResolutionResult.Member;
+                type = method.ContainingType;
 
                 bool hasError = false;
 
@@ -6108,7 +6109,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
-            CompoundUseSiteInfo<AssemblySymbol> useSiteInfo = GetNewCompoundUseSiteInfo(diagnostics);
+            CompoundUseSiteInfo<AssemblySymbol> useSiteInfo = GetNewCompoundUseSiteInfo(diagnostics);   
             candidateConstructors = GetAccessibleConstructorsForOverloadResolution(typeContainingConstructors, allowProtectedConstructorsOfBaseType, out allInstanceConstructors, ref useSiteInfo);
 
             OverloadResolutionResult<MethodSymbol> result = OverloadResolutionResult<MethodSymbol>.GetInstance();
@@ -6205,6 +6206,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
 
+            candidateConstructors = result.Results.SelectAsArray(x => x.Member);
+            
             result.Free();
             return succeededConsideringAccessibility;
         }

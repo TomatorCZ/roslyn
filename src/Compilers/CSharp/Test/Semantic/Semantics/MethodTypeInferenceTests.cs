@@ -1742,15 +1742,123 @@ class P
 
         [Fact]
         public void PartialObjectCreationTypeInference_Simple()
-        { }
+        {
+            var source = """
+using System;
+
+namespace X;
+
+public class P
+{
+    public void M2() 
+    {
+        // Inferred: [T1 = int, T2 = string] Simple test
+        new F1<_, string>(1); 
+        // Inferred: [T1 = int, T2 = string] Choose overload based on arity
+        new F2<_,_>(1,""); 
+        // Inferred: [T1 = int, T2 = string, T3 = string, T4 = string] Constructed type
+        new F3<int, _, string, _>(new G2<string, string>()); 
+        // Inferred: [T1 = int, T2 = int, T3 = string] Circle of dependency
+        new F4<_, _, string>(x => x + 1, y => y.ToString(),z => z.Length); 
+        // Inferred: [T1 = string] Expanded form #1
+        new F5<string>(1); 
+        // Inferred: [T1 = string] Expanded form #2
+        new F5<_>(1, ""); 
+        // Inferred: [T1 = string] Expanded form #3
+        new F5<_>(1, "", "");
+    }
+
+    class F1<T1, T2>{ public F1(T1 p1){} }
+    class F2<T1, T2>{ public F2(T1 p1, T2 p2) {} }
+    class F2<T1>{ public F2(T1 p1, string p2) {} }
+    class F3<T1, T2, T3, T4>{ public F3(G2<T2, T4> p24) {} }
+    class G2<T1, T2> {}
+    class F4<T1, T2, T3>{ public F4(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { } }
+    class F5<T>{ public F5(int p1, params T[] args) {} }
+}
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var constructors = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "X.P.F1<System.Int32, System.String>.F1(System.Int32 p1)",
+                "X.P.F2<System.Int32, System.String>.F2(System.Int32 p1, System.String p2)",
+                "X.P.F3<System.Int32, System.String, System.String, System.String>.F3(X.P.G2<System.String, System.String> p24)",
+                "X.P.G2<System.String, System.String>.G2()",
+                "X.P.F4<System.Int32, System.Int32, System.String>.F4(System.Func<System.Int32, System.Int32> p12, System.Func<System.Int32, System.String> p23, System.Func<System.String, System.Int32> p31)",
+                "X.P.F5<System.String>.F5(System.Int32 p1, params System.String[] args)",
+                "X.P.F5<System.String>.F5(System.Int32 p1, params System.String[] args)",
+                "X.P.F5<System.String>.F5(System.Int32 p1, params System.String[] args)"
+            };
+
+            CheckCallSites(model, constructors, callsites);
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_DiamondOperator()
         { }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_Nested()
-        { }
+        { 
+            var source = """
+class P
+{
+    void M1() 
+    {
+        B1<int> temp1 = null;
+        // Inferred: [ T1 = A1<int> ] Wrapper conversion
+        new F6<A1<_>>(temp1); 
+
+        B2<int, string> temp2 = null;
+        // Inferred: [ T1 = A2<int, string> ] Wrapper conversion with type argument
+        new F6<A2<_, string>>(temp2); 
+
+        C2<int, B> temp3 = null;
+        // Inferred: [ I2<int, A> ] Wrapper conversion with type argument conversion
+        new F6<I2<_, A>>(temp3); 
+    }   
+
+    class F6<T1>
+    { 
+        public F6(T1 p1) {}
+    }
+
+    class A {}
+    class B : A{}
+    class A1<T> {}
+    class B1<T> : A1<T> {}
+    class A2<T1, T2> {}
+    class B2<T1, T2> : A2<T1, T2> {}
+    interface I2<in T1, out T2> {}
+    class C2<T1, T2> : I2<T1, T2> {}
+}      
+""";
+
+            var compilation = CreateCompilation(
+                            source,
+                            parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var constructors = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            string[] callsites = new[] {
+                "P.F6<P.A1<System.Int32>>.F6(P.A1<System.Int32> p1)",
+                "P.F6<P.A2<System.Int32, System.String>>.F6(P.A2<System.Int32, System.String> p1)",
+                "P.F6<P.I2<System.Int32, P.A>>.F6(P.I2<System.Int32, P.A> p1)",
+            };
+
+            CheckCallSites(model, constructors, callsites);
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_Target()

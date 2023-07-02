@@ -303,15 +303,18 @@ namespace Microsoft.CodeAnalysis.CSharp
                 AddTarget(targets, sources, boundKinds, targetContraint.source, targetContraint.target, targetContraint.isRef);
 
             // initializer
-            targets.AddRange(initializerParameterTypes);
-            sources.AddRange(initiaizerArguments);
-            for (int i = 0; i < initializerParameterTypes.Length; i++)
+            if (!initializerParameterTypes.IsDefault)
             {
-                boundKinds.Add(((!initializerParameterRedKinds.IsDefault && initializerParameterRedKinds[i].IsManagedReference()) || initiaizerArguments[i].Type.IsPointerType())
-                    ? ExactOrShapeOrBoundsKind.Exact
-                    : ExactOrShapeOrBoundsKind.LowerBound);
+                targets.AddRange(initializerParameterTypes);
+                sources.AddRange(initiaizerArguments);
+            
+                for (int i = 0; i < initializerParameterTypes.Length; i++)
+                {
+                    boundKinds.Add(((!initializerParameterRedKinds.IsDefault && initializerParameterRedKinds[i].IsManagedReference()) || initiaizerArguments[i].Type.IsPointerType())
+                        ? ExactOrShapeOrBoundsKind.Exact
+                        : ExactOrShapeOrBoundsKind.LowerBound);
+                }
             }
-
             if (useTypeParametersConstrains)
                 AddConstraints(targets, sources, boundKinds, typeParameters);
 
