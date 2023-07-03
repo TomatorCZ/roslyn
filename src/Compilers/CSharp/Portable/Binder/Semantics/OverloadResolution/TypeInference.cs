@@ -394,6 +394,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                 TypeWithAnnotations target = _targets[arg];
                 ExactOrShapeOrBoundsKind kind = _boundKinds[arg];
 
+                if (source.HasExpressionType() && ContainsOutOfScopeInferredType(source.Type))
+                    continue;
+
                 if (kind == ExactOrShapeOrBoundsKind.Shape)
                 {
                     AddBoundAndDoFurtherInference(((BoundTypeExpression)source).TypeWithAnnotations, target, kind, ref useSiteInfo);
@@ -508,6 +511,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 var target = _targets[arg];
                 var source = _sources[arg];
+
+                if (source.HasExpressionType() && ContainsOutOfScopeInferredType(source.Type))
+                    continue;
+
                 MakeOutputTypeInferences(binder, source, target, ref useSiteInfo);
             }
         }
@@ -589,6 +596,14 @@ namespace Microsoft.CodeAnalysis.CSharp
         private int GetTypeVariableIndex(TypeSymbol variable)
         {
             return _typeVariables.IndexOf(variable);
+        }
+
+        private bool ContainsOutOfScopeInferredType(TypeSymbol symbol)
+        {
+            RoslynDebug.Assert((object)symbol != null);
+
+            var result = symbol.VisitType(static (t, l, _) => (t.TypeKind == TypeKindInternal.InferredType && !l.Contains(t)), _typeVariables);
+            return result is object;
         }
 
         private void AddBound(TypeWithAnnotations addedBound, HashSet<TypeWithAnnotations>[] collectedBounds, TypeWithAnnotations typeVariableWithAnnotations)
