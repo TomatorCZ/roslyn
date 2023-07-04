@@ -394,9 +394,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                 TypeWithAnnotations target = _targets[arg];
                 ExactOrShapeOrBoundsKind kind = _boundKinds[arg];
 
-                if (source.HasExpressionType() && ContainsOutOfScopeInferredType(source.Type))
-                    continue;
-
                 if (kind == ExactOrShapeOrBoundsKind.Shape)
                 {
                     AddBoundAndDoFurtherInference(((BoundTypeExpression)source).TypeWithAnnotations, target, kind, ref useSiteInfo);
@@ -512,9 +509,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                 var target = _targets[arg];
                 var source = _sources[arg];
 
-                if (source.HasExpressionType() && ContainsOutOfScopeInferredType(source.Type))
-                    continue;
-
                 MakeOutputTypeInferences(binder, source, target, ref useSiteInfo);
             }
         }
@@ -566,6 +560,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         #endregion
 
         #region Bounds
+
         private bool ValidIndex(int index)
         {
             return 0 <= index && index < _typeVariables.Length;
@@ -596,14 +591,6 @@ namespace Microsoft.CodeAnalysis.CSharp
         private int GetTypeVariableIndex(TypeSymbol variable)
         {
             return _typeVariables.IndexOf(variable);
-        }
-
-        private bool ContainsOutOfScopeInferredType(TypeSymbol symbol)
-        {
-            RoslynDebug.Assert((object)symbol != null);
-
-            var result = symbol.VisitType(static (t, l, _) => (t.TypeKind == TypeKindInternal.InferredType && !l.Contains(t)), _typeVariables);
-            return result is object;
         }
 
         private void AddBound(TypeWithAnnotations addedBound, HashSet<TypeWithAnnotations>[] collectedBounds, TypeWithAnnotations typeVariableWithAnnotations)
@@ -687,7 +674,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 if (collectedBound != null)
                 {
-                    foreach (var bound in collectedBound)
+                    foreach (var bound in collectedBound.ToList())
                     {
                         ExactOrBoundsInference(kind, bound, source, ref useSiteInfo);
                     }
@@ -698,7 +685,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 if (collectedBound != null)
                 {
-                    foreach (var bound in collectedBound)
+                    foreach (var bound in collectedBound.ToList())
                     {
                         if (ContainsTypeVariable(bound))
                             ExactOrBoundsInference(kind, source, bound, ref useSiteInfo);
