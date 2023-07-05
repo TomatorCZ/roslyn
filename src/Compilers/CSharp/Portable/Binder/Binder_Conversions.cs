@@ -225,6 +225,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                     }
                 }
 
+                if (source.Kind == BoundKind.UnconvertedInferredObjectCreationExpression)
+                {
+                    return ConvertInferredObjectCreationExpression(syntax, (BoundUnconvertedInferredObjectCreationExpression)source, conversion, isCast, destination, conversionGroupOpt, wasCompilerGenerated, diagnostics);
+                }
+
                 if (conversion.IsObjectCreation)
                 {
                     return ConvertObjectCreationExpression(syntax, (BoundUnconvertedObjectCreationExpression)source, conversion, isCast, destination, conversionGroupOpt, wasCompilerGenerated, diagnostics);
@@ -336,6 +341,24 @@ namespace Microsoft.CodeAnalysis.CSharp
                     CheckFeatureAvailability(syntax, MessageID.IDS_FeatureCheckedUserDefinedOperators, diagnostics);
                 }
             }
+        }
+
+        private BoundExpression ConvertInferredObjectCreationExpression(SyntaxNode syntax, BoundUnconvertedInferredObjectCreationExpression node, Conversion conversion, bool isCast, TypeSymbol destination,
+            ConversionGroup? conversionGroupOpt, bool wasCompilerGenerated, BindingDiagnosticBag diagnostics)
+        {
+            var arguments = AnalyzedArguments.GetInstance();
+            node.Binder.BindArgumentsAndNames(node.Arguments, node.Diagnostics, arguments, allowArglist: true);
+            bool targetTyped = conversion.Kind == ConversionKind.TargetTypedInferredObjectCreation;
+            BoundExpression expr = node.Binder.BindClassCreationExpression(node.Syntax, node.TypeName, node.TypeSyntax, (NamedTypeSymbol)node.Type, arguments, diagnostics, node.InitializerOpt, node.InitializerTypeOpt, destinationType: targetTyped ? destination : default);
+            arguments.Free();
+            Debug.Assert(expr is BoundObjectCreationExpressionBase { } or
+                     BoundDelegateCreationExpression { } or
+                     BoundBadExpression);
+
+            Debug.Assert(expr is not BoundBadExpression { ChildBoundNodes: var children } || !children.Any((child, node) => child.Syntax == node.Syntax, node));
+
+
+            return GenerateConversionForAssignment(destination, expr, diagnostics);
         }
 
         private static BoundExpression ConvertObjectCreationExpression(

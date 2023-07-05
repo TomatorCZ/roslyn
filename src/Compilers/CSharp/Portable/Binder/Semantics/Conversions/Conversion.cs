@@ -262,6 +262,8 @@ namespace Microsoft.CodeAnalysis.CSharp
         internal static Conversion PinnedObjectToPointer => new Conversion(ConversionKind.PinnedObjectToPointer);
         internal static Conversion ImplicitPointer => new Conversion(ConversionKind.ImplicitPointer);
         internal static Conversion FunctionType => new Conversion(ConversionKind.FunctionType);
+        internal static Conversion TargetTypedInferredObjectCreation => new Conversion(ConversionKind.TargetTypedInferredObjectCreation);
+        internal static Conversion InferredObjectCreation => new Conversion(ConversionKind.InferredObjectCreation);
 
         // trivial conversions that could be underlying in nullable conversion
         // NOTE: tuple conversions can be underlying as well, but they are not trivial 

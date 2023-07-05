@@ -415,7 +415,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                         return expr;
                     }
                     break;
-
+                case BoundKind.UnconvertedInferredObjectCreationExpression:
+                    if (valueKind == BindValueKind.RValue)
+                    {
+                        return expr;
+                    }
+                    break;
                 case BoundKind.PointerIndirectionOperator:
                     if ((valueKind & BindValueKind.RefersToLocation) == BindValueKind.RefersToLocation)
                     {

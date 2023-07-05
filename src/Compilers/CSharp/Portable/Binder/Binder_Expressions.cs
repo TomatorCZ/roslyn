@@ -286,6 +286,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression result;
             switch (expression)
             {
+                case BoundUnconvertedInferredObjectCreationExpression expr:
+                    AnalyzedArguments arguments = AnalyzedArguments.GetInstance();
+                    BindArgumentsAndNames(expr.Arguments, diagnostics, arguments, allowArglist: true);
+                    result = BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.TypeSyntax, (NamedTypeSymbol)expr.Type, arguments, diagnostics, expr.InitializerOpt, expr.InitializerTypeOpt);
+                    arguments.Free();
+                    break;
                 case BoundUnconvertedSwitchExpression expr:
                     {
                         var commonType = expr.Type;
@@ -2831,7 +2837,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         // Given a list of arguments, create arrays of the bound arguments and the names of those
         // arguments.
-        private void BindArgumentsAndNames(BaseArgumentListSyntax argumentListOpt, BindingDiagnosticBag diagnostics, AnalyzedArguments result, bool allowArglist = false, bool isDelegateCreation = false)
+        public void BindArgumentsAndNames(BaseArgumentListSyntax argumentListOpt, BindingDiagnosticBag diagnostics, AnalyzedArguments result, bool allowArglist = false, bool isDelegateCreation = false)
         {
             if (argumentListOpt is null)
             {
@@ -4494,23 +4500,20 @@ namespace Microsoft.CodeAnalysis.CSharp
                 var type = typeWithAnnotations.Type;
                 var originalType = type;
 
+                if (type.IsInferred())
+                {
+                    if (type.TypeKind == TypeKindInternal.InferredType || (type.TypeKind == TypeKind.Delegate || type.TypeKind == TypeKind.Interface))
+                    {
+                        save.Clear();
+                        typeWithAnnotations = BindType(node.Type, save);
+                        type = typeWithAnnotations.Type;
+                        originalType = type;
+                    }
+                }
+
                 if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
                 {
                     save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
-                }
-
-                if (type.TypeKind == TypeKindInternal.InferredType
-                || (type.TypeKind == TypeKind.Delegate && ((NamedTypeSymbol)type).TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(OverloadResolution.IsInferredType)))
-                {
-                    save.Clear();
-                    typeWithAnnotations = BindType(node.Type, save);
-                    type = typeWithAnnotations.Type;
-                    originalType = type;
-
-                    if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
-                    {
-                        save.Add(ErrorCode.ERR_AnnotationDisallowedInObjectCreation, node.Location);
-                    }
                 }
 
 
@@ -4737,6 +4740,11 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private BoundExpression BindClassCreationExpression(ObjectCreationExpressionSyntax node, NamedTypeSymbol type, string typeName, BindingDiagnosticBag diagnostics, TypeSymbol initializerType = null)
         {
+            if (type.IsInferred() && !type.IsStatic && node.Type.Kind() != SyntaxKind.TupleType)
+            {
+                return new BoundUnconvertedInferredObjectCreationExpression(node, typeName, node.ArgumentList, node.Initializer, initializerType, node.Type, diagnostics, this, type);
+            }
+
             // Get the bound arguments and the argument names.
             AnalyzedArguments analyzedArguments = AnalyzedArguments.GetInstance();
             try
@@ -5707,7 +5715,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        protected BoundExpression BindClassCreationExpression(
+        public BoundExpression BindClassCreationExpression(
             SyntaxNode node,
             string typeName,
             SyntaxNode typeNode,
@@ -5716,7 +5724,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             InitializerExpressionSyntax initializerSyntaxOpt = null,
             TypeSymbol initializerTypeOpt = null,
-            bool wasTargetTyped = false)
+            bool wasTargetTyped = false,
+            BindValueKind valueKind = default, 
+            TypeSymbol destinationType = default
+            )
         {
             BoundExpression result = null;
             bool hasErrors = type.IsErrorType();
@@ -5743,7 +5754,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 useSiteInfo = new CompoundUseSiteInfo<AssemblySymbol>(useSiteInfo);
 
                 if (!type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.IsDefault
-                    && type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(OverloadResolution.IsInferredType))
+                    && type.IsInferred())
                 {
                     Error(diagnostics, ErrorCode.ERR_TypeHintsInDynamicObjectCreation, node);
                 }
@@ -5785,7 +5796,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                     out MemberResolutionResult<MethodSymbol> memberResolutionResult,
                     out ImmutableArray<MethodSymbol> candidateConstructors,
                     allowProtectedConstructorsOfBaseType: false,
-                    suppressUnsupportedRequiredMembersError: false) &&
+                    suppressUnsupportedRequiredMembersError: false,
+                    valueKind: valueKind,
+                    destinationType: destinationType) &&
                 !type.IsAbstract && !analyzedArguments.HasDynamicArgument)
             {
                 var method = memberResolutionResult.Member;
@@ -5839,6 +5852,9 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 return creation;
             }
+
+            if (type.IsInferred())
+                type = type.OriginalDefinition;
 
             LookupResultKind resultKind;
 
@@ -6110,7 +6126,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             out MemberResolutionResult<MethodSymbol> memberResolutionResult,
             out ImmutableArray<MethodSymbol> candidateConstructors,
             bool allowProtectedConstructorsOfBaseType,
-            bool suppressUnsupportedRequiredMembersError) // Last to make named arguments more convenient.
+            bool suppressUnsupportedRequiredMembersError, // Last to make named arguments more convenient.
+            BindValueKind valueKind = default,
+            TypeSymbol destinationType = default) 
         {
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
@@ -6128,7 +6146,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (candidateConstructors.Any())
             {
                 // We have at least one accessible candidate constructor, perform overload resolution with accessible candidateConstructors.
-                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo);
+                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
 
                 if (result.Succeeded)
                 {
@@ -6212,7 +6230,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             candidateConstructors = result.Results.SelectAsArray(x => x.Member);
-            
+
             result.Free();
             return succeededConsideringAccessibility;
         }

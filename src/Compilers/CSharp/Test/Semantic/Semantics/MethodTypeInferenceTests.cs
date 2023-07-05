@@ -1859,9 +1859,159 @@ class P
             CheckCallSites(model, constructors, callsites);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_Target()
-        { }
+        {
+            var source = """
+using System;
+using System.Collections.Generic;
+
+class P 
+{
+    void Test_VariableDeclaration() 
+    {
+        // Inferred: [T = int]
+        C1<int> temp1 = new C2<_>();
+    }
+    
+    void Test_ClassObjectCreation()
+    {
+        // Inferred: [T = int]
+        new C4(new C2<_>());
+
+        // Inferred: [T = int]
+        new C5<_>(new C5<_>(1));
+
+        // Inferred: [T = int]  
+        new C3<_>(new C2<_>(), 1);
+    }
+
+    class C3<T>
+    {
+        public C3(C1<T> p1, T p2) {}
+    }
+    class C4 
+    {
+        public C4(C1<int> p1) {}
+    }
+
+    void Test_InvocationExpression()
+    {
+        // Inferred: [T = int]
+        F2(new C2<_>());
+
+        // Inferred: [T = int]
+        F3(new C5<_>(1));
+
+        // Inferred: [T = int]
+        F1(new C2<_>(), 1);
+    }
+
+    class C5<T> : C1<T>
+    {
+        public C5(T p1) {}
+    }
+
+    void F1<T>(C1<T> p1, T p2) {}
+    void F2(C1<int> p1) {}
+    void F3<T>(T p1) {}
+
+    void Test_ArrayInitializer()
+    {
+        // Inferred: [T = int]
+        var temp1 = new C1<int>[] { new C2<_>() };
+
+        // Inferred: [T = int]
+        var temp2 = new [] { new C1<int>(), new C2<_>() };
+    }
+
+    void Test_ObjectInitializer()
+    {
+        // Inferred: [T = int]
+        new M4 { P1 = new C2<_>()};
+    }
+
+    class M4 
+    {
+        public C1<int> P1 = null;
+    }
+
+    void Test_CollectionInitializer()
+    {
+        // Inferred: [T = int]
+        new List<C1<int>> { new C2<_>() };
+    }
+
+    void Test_Lambda()
+    {
+        // Inferred: [T = int]
+        Func<C1<int>> temp2 = () => new C2<_>();
+    }
+
+    void Test_Assignment() 
+    {
+        // Inferred: [T = int]
+        C1<int> temp3 = null;
+        temp3 = new C2<_>();
+    }
+    
+    
+    C1<int> Test_Return1() {
+        // Inferred: [T = int]
+        return new C2<_>();
+    }
+
+    //Inferred: [T = int]
+    C1<int> Test_Return2() => new C2<_>();
+
+    // Inferred: [T = int]
+    C1<int> Test_FieldInitializer = new C2<_>();
+
+    class C1<T> {}
+    class C2<T> : C1<T> {}
+}
+""";
+
+            var compilation = CreateCompilation(
+                   source,
+                   parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+            var m_ctors = methods.SelectMany(x => x.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()).ToArray();
+            var m_expect_ctors = new[]{
+                "P.C2<System.Int32>.C2()",
+                "P.C4.C4(P.C1<System.Int32> p1)",
+                "P.C2<System.Int32>.C2()",
+                "P.C5<P.C5<System.Int32>>.C5(P.C5<System.Int32> p1)",
+                "P.C5<System.Int32>.C5(System.Int32 p1)",
+                "P.C3<System.Int32>.C3(P.C1<System.Int32> p1, System.Int32 p2)",
+                "P.C2<System.Int32>.C2()",
+                "P.C2<System.Int32>.C2()",
+                "P.C5<System.Int32>.C5(System.Int32 p1)",
+                "P.C2<System.Int32>.C2()",
+                "P.C2<System.Int32>.C2()",
+                "P.C1<System.Int32>.C1()",
+                "P.C2<System.Int32>.C2()",
+                "P.M4.M4()",
+                "P.C2<System.Int32>.C2()",
+                "System.Collections.Generic.List<P.C1<System.Int32>>.List()",
+                "P.C2<System.Int32>.C2()",
+                "P.C2<System.Int32>.C2()",
+                "P.C2<System.Int32>.C2()",
+                "P.C2<System.Int32>.C2()",
+                "P.C2<System.Int32>.C2()"
+            };
+            CheckCallSites(model, m_ctors, m_expect_ctors);
+
+            var fields = tree.GetRoot().DescendantNodes().OfType<FieldDeclarationSyntax>().ToList();
+            var f_ctors = fields.SelectMany(x => x.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()).ToArray();
+            var f_expect_ctors = "P.C2<System.Int32>.C2()";
+            CheckCallSite(model, f_ctors[0], f_expect_ctors);
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_Initializer()
@@ -1921,9 +2071,13 @@ class P {
         new F1<_,_>(""); // Error: Can't infer T2
         new F1<int, string>(""); // Error: int != string
         new F1<byte,_>(257); // Error: Can't infer T2
+        F2(new F1<_,_>("")); // Error
+        F3(new F1<_,_>(1)); // Error
+        new F1<_,_>(new F1<_,_>(1)); // Error
     }
-
     class F1<T1, T2>{ public F1(T1 p1) {} }
+    void F2<T1>(T1 p1) {}
+    void F3<T1, T2>(T1 p1) {}
 }
 """;
 
@@ -1939,7 +2093,16 @@ class P {
                     Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 29),
                     // (6,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
                     //         new F1<byte,_>(257); // Error: Can't infer T2
-                    Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(6, 13)
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(6, 13),
+                // (7,9): error CS0411: The type arguments for method 'P.F2<T1>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F2(new F1<_,_>("")); // Error
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F2").WithArguments("P.F2<T1>(T1)").WithLocation(7, 9),
+                // (8,9): error CS0411: The type arguments for method 'P.F3<T1, T2>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F3(new F1<_,_>(1)); // Error
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F3").WithArguments("P.F3<T1, T2>(T1)").WithLocation(8, 9),
+                // (9,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,_>(new F1<_,_>(1)); // Error
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(9, 13)
             });
         }
 

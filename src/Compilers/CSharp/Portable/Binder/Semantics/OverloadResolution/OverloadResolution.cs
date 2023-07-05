@@ -14,6 +14,7 @@ using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Collections;
 using Microsoft.CodeAnalysis.Symbols;
 using Roslyn.Utilities;
+using static Microsoft.CodeAnalysis.CSharp.Binder;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
@@ -97,18 +98,19 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         // Perform overload resolution on the given method group, with the given arguments and
         // names. The names can be null if no names were supplied to any arguments.
-        public void ObjectCreationOverloadResolution(ImmutableArray<MethodSymbol> constructors, AnalyzedArguments arguments, OverloadResolutionResult<MethodSymbol> result, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        public void ObjectCreationOverloadResolution(ImmutableArray<MethodSymbol> constructors, AnalyzedArguments arguments, OverloadResolutionResult<MethodSymbol> result, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,BindValueKind valueKind = default,
+            TypeSymbol destinationType = default)
         {
             var results = result.ResultsBuilder;
 
             // First, attempt overload resolution not getting complete results.
-            PerformObjectCreationOverloadResolution(results, constructors, arguments, false, ref useSiteInfo);
+            PerformObjectCreationOverloadResolution(results, constructors, arguments, false, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
 
             if (!OverloadResolutionResultIsValid(results, arguments.HasDynamicArgument))
             {
                 // We didn't get a single good result. Get full results of overload resolution and return those.
                 result.Clear();
-                PerformObjectCreationOverloadResolution(results, constructors, arguments, true, ref useSiteInfo);
+                PerformObjectCreationOverloadResolution(results, constructors, arguments, true, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
             }
         }
 
@@ -711,7 +713,8 @@ outerDefault:
         }
 
         private void AddConstructorToCandidateSet(MethodSymbol constructor, ArrayBuilder<MemberResolutionResult<MethodSymbol>> results,
-            AnalyzedArguments arguments, bool completeResults, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            AnalyzedArguments arguments, bool completeResults, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,BindValueKind valueKind = default,
+            TypeSymbol destinationType = default)
         {
             // Filter out constructors with unsupported metadata.
             if (constructor.HasUnsupportedMetadata)
@@ -724,13 +727,13 @@ outerDefault:
                 return;
             }
 
-            var normalResult = IsConstructorApplicableInNormalForm(constructor, arguments, completeResults, ref useSiteInfo);
+            var normalResult = IsConstructorApplicableInNormalForm(constructor, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
             var result = normalResult;
             if (!normalResult.IsValid)
             {
                 if (IsValidParams(constructor))
                 {
-                    var expandedResult = IsConstructorApplicableInExpandedForm(constructor, arguments, completeResults, ref useSiteInfo);
+                    var expandedResult = IsConstructorApplicableInExpandedForm(constructor, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
                     if (expandedResult.IsValid || completeResults)
                     {
                         result = expandedResult;
@@ -748,14 +751,16 @@ outerDefault:
         private static bool IsConstructorInferred(MethodSymbol constructor) 
         {
             return (!constructor.ContainingType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.IsDefault
-                || constructor.ContainingType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType));
+                || constructor.ContainingType.IsInferred());
         }
 
         private MemberResolutionResult<MethodSymbol> IsConstructorApplicableInNormalForm(
             MethodSymbol constructor,
             AnalyzedArguments arguments,
             bool completeResults,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            BindValueKind valueKind = default,
+            TypeSymbol destinationType = default)
         {
             var argumentAnalysis = AnalyzeArguments(constructor, arguments, isMethodGroupConversion: false, expanded: false); // Constructors are never involved in method group conversion.
             if (!argumentAnalysis.IsValid)
@@ -786,14 +791,18 @@ outerDefault:
                 hasAnyRefOmittedArgument: false,
                 ignoreOpenTypes: false,
                 completeResults: completeResults,
-                useSiteInfo: ref useSiteInfo);
+                useSiteInfo: ref useSiteInfo,
+                valueKind: valueKind,
+                destinationType: destinationType);
         }
 
         private MemberResolutionResult<MethodSymbol> IsConstructorApplicableInExpandedForm(
             MethodSymbol constructor,
             AnalyzedArguments arguments,
             bool completeResults,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            BindValueKind valueKind = default,
+            TypeSymbol destinationType = default)
         {
             var argumentAnalysis = AnalyzeArguments(constructor, arguments, isMethodGroupConversion: false, expanded: true);
             if (!argumentAnalysis.IsValid)
@@ -827,7 +836,9 @@ outerDefault:
                 hasAnyRefOmittedArgument: false,
                 ignoreOpenTypes: false,
                 completeResults: completeResults,
-                useSiteInfo: ref useSiteInfo);
+                useSiteInfo: ref useSiteInfo,
+                valueKind: valueKind,
+                destinationType: destinationType);
 
             return result.IsValid ? new MemberResolutionResult<MethodSymbol>(result.Member, result.LeastOverriddenMember, MemberAnalysisResult.ExpandedForm(result.Result.ArgsToParamsOpt, result.Result.ConversionsOpt, hasAnyRefOmittedArgument: false), false) : result;
         }
@@ -1432,7 +1443,9 @@ outerDefault:
             ImmutableArray<MethodSymbol> constructors,
             AnalyzedArguments arguments,
             bool completeResults,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            BindValueKind valueKind = default,
+            TypeSymbol destinationType = default)
         {
             // SPEC: The instance constructor to invoke is determined using the overload resolution 
             // SPEC: rules of 7.5.3. The set of candidate instance constructors consists of all 
@@ -1442,7 +1455,7 @@ outerDefault:
 
             foreach (MethodSymbol constructor in constructors)
             {
-                AddConstructorToCandidateSet(constructor, results, arguments, completeResults, ref useSiteInfo);
+                AddConstructorToCandidateSet(constructor, results, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
             }
 
             ReportUseSiteInfo(results, ref useSiteInfo);
@@ -3497,13 +3510,15 @@ outerDefault:
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
             where TMember : Symbol
         {
+            var arguments1 = AnalyzedArguments.GetInstance(arguments);
+            bindWithTarget(arguments1, constructedEffectiveParameters.ParameterTypes, ImmutableArray<TypeParameterSymbol>.Empty);
             bool ignoreOpenTypes;
             MethodSymbol method;
             EffectiveParameters effectiveParameters;
             bool hasTypeArgumentsInferredFromFunctionType = false;
             if (member.Kind == SymbolKind.Method && (method = (MethodSymbol)(Symbol)member).Arity > 0)
             {
-                if ((typeArgumentsBuilder.Count == 0 || typeArgumentsBuilder.Any(IsInferredType)) && arguments.HasDynamicArgument && !inferWithDynamic)
+                if ((typeArgumentsBuilder.Count == 0 || typeArgumentsBuilder.Any(x => x.Type.IsInferred())) && arguments1.HasDynamicArgument && !inferWithDynamic)
                 {
                     // Spec 7.5.4: Compile-time checking of dynamic overload resolution:
                     // * First, if F is a generic method and type arguments were provided, 
@@ -3516,10 +3531,10 @@ outerDefault:
                     // have no effect on applicability of this candidate.
                     ignoreOpenTypes = true;
 
-                    if (typeArgumentsBuilder.Any(IsInferredType))
+                    if (typeArgumentsBuilder.Any(x => x.Type.IsInferred()))
                     {
                         var sub = typeArgumentsBuilder.SelectAsArray(
-                            (x, index) => IsInferredType(x) 
+                            (x, index) => x.Type.IsInferred()
                             ? TypeWithAnnotations.Create(((MethodSymbol)(Symbol)leastOverriddenMember).ConstructedFrom.TypeParameters[index]) 
                             : x);
 
@@ -3541,7 +3556,7 @@ outerDefault:
                     MethodSymbol leastOverriddenMethod = (MethodSymbol)(Symbol)leastOverriddenMember;
 
                     ImmutableArray<TypeWithAnnotations> typeArguments;
-                    if (typeArgumentsBuilder.Count > 0 && !typeArgumentsBuilder.Any(IsInferredType))
+                    if (typeArgumentsBuilder.Count > 0 && !typeArgumentsBuilder.Any(x => x.Type.IsInferred()))
                     {
                         // generic type arguments explicitly specified at call-site:
                         typeArguments = typeArgumentsBuilder.ToImmutable();
@@ -3552,7 +3567,7 @@ outerDefault:
                         MemberAnalysisResult inferenceError;
                         typeArguments = InferMethodTypeArguments(method,
                                             leastOverriddenMethod.ConstructedFrom.TypeParameters,
-                                            arguments,
+                                            arguments1,
                                             originalEffectiveParameters,
                                             out hasTypeArgumentsInferredFromFunctionType,
                                             out inferenceError,
@@ -3627,13 +3642,14 @@ outerDefault:
             var applicableResult = IsApplicable(
                 member,
                 effectiveParameters,
-                arguments,
+                arguments1,
                 argsToParamsMap,
                 isVararg: member.GetIsVararg(),
                 hasAnyRefOmittedArgument: hasAnyRefOmittedArgument,
                 ignoreOpenTypes: ignoreOpenTypes,
                 completeResults: completeResults,
                 useSiteInfo: ref useSiteInfo);
+            arguments1.Free();
             return new MemberResolutionResult<TMember>(member, leastOverriddenMember, applicableResult, hasTypeArgumentsInferredFromFunctionType);
         }
 
@@ -3704,31 +3720,63 @@ outerDefault:
             return default(ImmutableArray<TypeWithAnnotations>);
         }
 
-        private MemberResolutionResult<MethodSymbol> IsConstructorApplicable(
-            MethodSymbol constructor,
-            EffectiveParameters parameters,
-            AnalyzedArguments arguments,
-            ImmutableArray<int> argsToParameters,
-            bool isVararg,
-            bool hasAnyRefOmittedArgument,
-            bool ignoreOpenTypes,
-            bool completeResults,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        void bindWithTarget(AnalyzedArguments arguments, ImmutableArray<TypeWithAnnotations> parameterTypes, ImmutableArray<TypeParameterSymbol> typeParams)
         {
+            var diagnostics = BindingDiagnosticBag.GetInstance();
+            for (int i = 0; i < arguments.Arguments.Count; i++)
+            {
+                if (arguments.Arguments[i].Kind == BoundKind.UnconvertedInferredObjectCreationExpression)
+                {
+                    var expr = (BoundUnconvertedInferredObjectCreationExpression)arguments.Arguments[i];
+
+                    if (parameterTypes[i].Type.ContainsMethodTypeParameter() || parameterTypes[i].Type.VisitType((t,_,_) => typeParams.Contains(t), (object?)null) is object)
+                    {
+                        var type = expr.Binder.BindToNaturalType(expr, BindingDiagnosticBag.Discarded);
+                        if (!type.HasAnyErrors)
+                            arguments.Arguments[i] = new BoundConversion(expr.Syntax, expr, Conversion.InferredObjectCreation, false, false, null, null, type.Type);
+                    }
+                    else
+                    {
+                        var analyzedArgs = AnalyzedArguments.GetInstance();
+                        expr.Binder.BindArgumentsAndNames(expr.Arguments, expr.Diagnostics, analyzedArgs, true);
+                        var type = expr.Binder.BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.TypeSyntax, (NamedTypeSymbol)expr.Type, analyzedArgs, BindingDiagnosticBag.Discarded, expr.InitializerOpt, expr.InitializerTypeOpt, true, destinationType: parameterTypes[i].Type);
+                        analyzedArgs.Free();
+                        if (!type.HasAnyErrors)
+                            arguments.Arguments[i] = new BoundConversion(expr.Syntax, expr, Conversion.TargetTypedInferredObjectCreation, false, false, null, null, type.Type);
+                    }
+                }
+            }
+        }
+
+        private MemberResolutionResult<MethodSymbol> IsConstructorApplicable(
+        MethodSymbol constructor,
+        EffectiveParameters parameters,
+        AnalyzedArguments arguments,
+        ImmutableArray<int> argsToParameters,
+        bool isVararg,
+        bool hasAnyRefOmittedArgument,
+        bool ignoreOpenTypes,
+        bool completeResults,
+        ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+        BindValueKind valueKind = default,
+        TypeSymbol destinationType = default)
+        {
+            var arguments1 = AnalyzedArguments.GetInstance(arguments);
+            bindWithTarget(arguments1, parameters.ParameterTypes, constructor.ContainingType.TypeParameters);
             NamedTypeSymbol contatiningType = constructor.ContainingType;
             EffectiveParameters effectiveParameters;
             bool hasTypeArgumentsInferredFromFunctionType = false;
 
-            if (contatiningType.Arity > 0 && contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType))
+            if (contatiningType.Arity > 0 && contatiningType.IsInferred())
             {
-                if (arguments.HasDynamicArgument)
+                if (arguments1.HasDynamicArgument)
                 {
                     ignoreOpenTypes = true;
 
-                    if (contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.Any(IsInferredType))
+                    if (contatiningType.IsInferred())
                     {
                         var sub = contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.SelectAsArray(
-                            (x, index) => IsInferredType(x)
+                            (x, index) => x.Type.IsInferred()
                             ? TypeWithAnnotations.Create(contatiningType.ConstructedFrom.TypeParameters[index])
                             : x);
                         NamedTypeSymbol genericType = contatiningType.OriginalDefinition;
@@ -3748,6 +3796,7 @@ outerDefault:
 
                     // infer generic type arguments:
                     MemberAnalysisResult inferenceError;
+                    var targetConstraint = (destinationType is { }) ? (TypeWithAnnotations.Create(destinationType), TypeWithAnnotations.Create(genericType), valueKind == BindValueKind.RefAssignable) : default;
                     var inferenceResult = TypeInferrer.InferConstructor(
                         _binder,
                         _binder.Conversions,
@@ -3755,10 +3804,11 @@ outerDefault:
                         genericType,
                         parameters.ParameterTypes,
                         parameters.ParameterRefKinds,
-                        arguments.Arguments.ToImmutable(),
+                        arguments1.Arguments.ToImmutable(),
                         ref useSiteInfo,
                         GetInferredSymbols(contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics),
-                        contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics);
+                        contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics,
+                        targetContraint: targetConstraint);
 
                     if (inferenceResult.Success)
                     {
@@ -3769,6 +3819,7 @@ outerDefault:
                     {
                         hasTypeArgumentsInferredFromFunctionType = false;
                         inferenceError = MemberAnalysisResult.TypeInferenceFailed();
+                        arguments1.Free();
                         return new MemberResolutionResult<MethodSymbol>(constructor.OriginalDefinition, constructor.OriginalDefinition, inferenceError, false);
                     }
 
@@ -3780,6 +3831,7 @@ outerDefault:
                     {
                         if (!parameterTypes[i].Type.CheckAllConstraints(Compilation, Conversions))
                         {
+                            arguments1.Free();
                             return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.ConstructedParameterFailedConstraintsCheck(i), false);
                         }
                     }
@@ -3802,13 +3854,14 @@ outerDefault:
             var applicableResult = IsApplicable(
                 constructor,
                 effectiveParameters,
-                arguments,
+                arguments1,
                 argsToParameters,
                 isVararg: isVararg,
                 hasAnyRefOmittedArgument: hasAnyRefOmittedArgument,
                 ignoreOpenTypes: ignoreOpenTypes,
                 completeResults: completeResults,
                 useSiteInfo: ref useSiteInfo);
+            arguments1.Free();
 
             return new MemberResolutionResult<MethodSymbol>(constructor, constructor, applicableResult, hasTypeArgumentsInferredFromFunctionType);
         }
@@ -3988,7 +4041,6 @@ outerDefault:
             {
                 return Conversion.NoConversion;
             }
-
             // TODO (tomat): the spec wording isn't final yet
 
             // Spec 7.5.4: Compile-time checking of dynamic overload resolution:

@@ -6290,7 +6290,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // Re-infer method type parameters
                 if (method?.IsGenericMethod == true)
                 {
-                    if ((node is BoundCall { } call && !call.OriginalTypeArgsOpt.IsDefault && call.OriginalTypeArgsOpt.Any(OverloadResolution.IsInferredType)) 
+                    if ((node is BoundCall { } call && !call.OriginalTypeArgsOpt.IsDefault && call.OriginalTypeArgsOpt.Any(x => x.Type.IsInferred())) 
                         || HasImplicitTypeArguments(node))
                     {
                         method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded, (node as BoundCall)?.OriginalTypeArgsOpt ?? default);

@@ -615,7 +615,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private static BoundMethodGroup ConvertInferredTypeArgsToGenericVersion(BoundMethodGroup group) 
         {
-            if (!group.TypeArgumentsOpt.IsDefault && group.TypeArgumentsOpt.Any(OverloadResolution.IsInferredType))
+            if (!group.TypeArgumentsOpt.IsDefault && group.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
             {
                 return group.Update(default, group.Name, group.Methods, group.LookupSymbolOpt, group.LookupError, group.Flags, group.FunctionType, group.ReceiverOpt, group.ResultKind);
             }
@@ -639,7 +639,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression result;
             if (analyzedArguments.Arguments.Any(x => x.Type is { } && x.Type.IsDynamic()) 
                 && !methodGroup.TypeArgumentsOpt.IsDefault 
-                && methodGroup.TypeArgumentsOpt.Any(OverloadResolution.IsInferredType))
+                && methodGroup.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
             {
                 Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, syntax);
             }

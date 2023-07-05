@@ -1840,6 +1840,17 @@
     <Field Name="Binder" Type="Binder" Null="disallow"/>
   </Node>
 
+  <Node Name="BoundUnconvertedInferredObjectCreationExpression" Base="BoundExpression">
+    <Field Name="Type" Type="TypeSymbol" Override="true" Null="disallow"/>
+    <Field Name="TypeName" Type="String" Null="disallow"/>
+    <Field Name="Arguments" Type="ArgumentListSyntax"/>
+    <Field Name="InitializerOpt" Type="InitializerExpressionSyntax?" Null="allow"/>
+    <Field Name="InitializerTypeOpt" Type="TypeSymbol?" Null="allow"/>
+    <Field Name="TypeSyntax" Type="SyntaxNode" Null="disallow"/>
+    <Field Name="Diagnostics" Type="BindingDiagnosticBag" Null="disallow"/>
+    <Field Name="Binder" Type="Binder" Null="disallow"/>
+  </Node>
+
   <AbstractNode Name="BoundObjectCreationExpressionBase" Base="BoundExpression">
     <!-- Non-null type is required for this node kind -->
     <Field Name="Type" Type="TypeSymbol" Override="true" Null="disallow"/>

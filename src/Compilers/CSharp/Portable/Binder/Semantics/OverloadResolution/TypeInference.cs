@@ -416,7 +416,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 !MakeExplicitParameterTypeInferences((BoundTupleLiteral)source, target, kind, ref useSiteInfo))
             {
                 var argumentType = _extensions.GetTypeWithAnnotations(source);
-                if (IsReallyAType(argumentType.Type))
+                if (IsReallyAType(argumentType.Type) && source.Kind != BoundKind.UnconvertedInferredObjectCreationExpression)
                 {
                     ExactOrBoundsInference(kind, argumentType, target, ref useSiteInfo);
                 }
@@ -2036,7 +2036,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return;
             }
 
-            Debug.Assert(source.Type.IsReferenceType || source.Type.IsFunctionPointer());
 
             if (UpperBoundConstructedInference(source, target, ref useSiteInfo))
             {

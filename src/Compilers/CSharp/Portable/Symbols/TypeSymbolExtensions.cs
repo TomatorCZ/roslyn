@@ -133,6 +133,31 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             return type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
         }
 
+        public static bool IsInferred(this TypeSymbol type)
+        {
+            return isInferredType(TypeWithAnnotations.Create(type));
+
+            static bool isInferredType(TypeWithAnnotations type)
+            {
+                if (type.TypeKind == TypeKindInternal.InferredType)
+                    return true;
+
+                if (type.Type is NamedTypeSymbol { TypeArgumentsWithAnnotationsNoUseSiteDiagnostics: { } typeArgs })
+                {
+                    for (int i = 0; i < typeArgs.Length; i++)
+                    {
+                        if (isInferredType(typeArgs[i])) return true;
+                    }
+                    return false;
+                }
+
+                if (type.Type is ArrayTypeSymbol { } arraySymbol)
+                    return isInferredType(arraySymbol.ElementTypeWithAnnotations);
+
+                return false;
+            }
+        }
+
         public static bool IsValidNullableTypeArgument(this TypeSymbol type)
         {
             return type is { IsValueType: true }
@@ -1139,6 +1164,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         public static bool ContainsMethodTypeParameter(this TypeSymbol type)
         {
             var result = type.VisitType(s_containsMethodTypeParameterPredicate, null);
+            return result is object;
+        }
+
+        public static bool ContainsContainingTypeTypeParameter(this TypeSymbol type)
+        {
+            var result = type.VisitType(((t, _, _) => t.TypeKind == TypeKind.TypeParameter && type.ContainingSymbol.ContainingType.TypeParameters.Contains(t)), (object?)null);
             return result is object;
         }
 

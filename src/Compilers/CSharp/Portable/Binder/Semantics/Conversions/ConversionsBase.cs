@@ -1094,6 +1094,11 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 case BoundKind.UnconvertedObjectCreationExpression:
                     return Conversion.ObjectCreation;
+                
+                case BoundKind.UnconvertedInferredObjectCreationExpression:
+                    return Conversion.TargetTypedInferredObjectCreation;
+                case BoundKind.Conversion when ((((BoundConversion)sourceExpression).Conversion.Kind == ConversionKind.TargetTypedInferredObjectCreation) || (((BoundConversion)sourceExpression).Conversion.Kind == ConversionKind.InferredObjectCreation)):
+                    return ((BoundConversion)sourceExpression).Conversion;
             }
 
             return Conversion.NoConversion;
