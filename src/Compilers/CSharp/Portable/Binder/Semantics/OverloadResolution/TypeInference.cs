@@ -286,9 +286,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<SourceInferredTypeSymbol> inferredTypeParameters = default,
             ImmutableArray<TypeWithAnnotations> typeArguments = default,
             (TypeWithAnnotations source, TypeWithAnnotations target, bool isRef) targetContraint = default,
-            ImmutableArray<TypeWithAnnotations> initializerParameterTypes = default,
-            ImmutableArray<RefKind> initializerParameterRedKinds = default,
-            ImmutableArray<BoundExpression> initiaizerArguments = default,
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default,
             bool useTypeParametersConstrains = false,
             Extensions extensions = null
             ) 
@@ -303,14 +301,14 @@ namespace Microsoft.CodeAnalysis.CSharp
                 AddTarget(targets, sources, boundKinds, targetContraint.source, targetContraint.target, targetContraint.isRef);
 
             // initializer
-            if (!initializerParameterTypes.IsDefault)
+            if (!analyzedInitializers.IsDefault)
             {
-                targets.AddRange(initializerParameterTypes);
-                sources.AddRange(initiaizerArguments);
+                targets.AddRange(analyzedInitializers.Select(x => x.Item1));
+                sources.AddRange(analyzedInitializers.Select(x => x.Item3));
             
-                for (int i = 0; i < initializerParameterTypes.Length; i++)
+                for (int i = 0; i < analyzedInitializers.Length; i++)
                 {
-                    boundKinds.Add(((!initializerParameterRedKinds.IsDefault && initializerParameterRedKinds[i].IsManagedReference()) || initiaizerArguments[i].Type.IsPointerType())
+                    boundKinds.Add(((!analyzedInitializers.IsDefault && analyzedInitializers[i].Item2.IsManagedReference()) || analyzedInitializers[i].Item3.Type.IsPointerType())
                         ? ExactOrShapeOrBoundsKind.Exact
                         : ExactOrShapeOrBoundsKind.LowerBound);
                 }

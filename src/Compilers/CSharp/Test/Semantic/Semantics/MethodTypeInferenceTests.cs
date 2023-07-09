@@ -2015,7 +2015,91 @@ class P
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_Initializer()
-        { }
+        { 
+            var source = """
+using System.Collections;
+using System;
+class P 
+{
+    void Test_ObjectInitializer() 
+    {
+        // Inferred: [T1 = int, T2 = string]
+        new C5<_, _, int> {Prop1 = 1, Prop2 = ""}; 
+        new C5<int, _, int> {Prop1 = new(), Prop2 = ""};
+        new C5<int, _, _> {Prop1 = new(), Prop2 = "", Field1 = ""};
+        new C5<int, _, int> {Prop2 = 1, Field2 = new C9<_>()};
+        new C5<_,int, int> {Prop1 = new C5<_,int,int>{Prop1 = 1}};
+    }
+
+    class C5<T1, T2, T3>
+    {
+        public T1 Prop1 {get;set;}
+        public T2 Prop2 {get;set;}
+        public T3 Field1 = default;
+        public C9<int> Field2 = default;
+    }
+
+    class C9<T> 
+    {}
+
+    void Test_CollectionInitializer()
+    {
+        //Inferred: [T1 = 1, T2 = string]
+        new C6<_,_> {{1, ""}};
+
+        // Error: Can't infered because Add method has overloads.
+        new C7<_,_> {1, "" }; 
+    }
+
+    class C6<T1, T2> : IEnumerable
+    {
+        public IEnumerator GetEnumerator() {return null;}
+        public void Add(T1 p1, T2 p2) {} 
+    }
+
+    class C7<T1, T2> : IEnumerable
+    {
+        public IEnumerator GetEnumerator() {return null;}
+        public void Add(T1 p1) {}
+        public void Add(T2 p2){}
+    }
+
+    void Test_CollectionInitializerByIndexer()
+    {
+        //Inferred: [T1 = int, T2 = string]
+        var temp = new C8<_,_> 
+        {
+            ["A"] = 1
+        };
+    }
+
+    class C8<T1, T2>
+    {
+        public T1 this[T2 p1] {get {throw new NotImplementedException();} set {throw new NotImplementedException();}}
+    }
+}
+"""; 
+            var compilation = CreateCompilation(
+                   source,
+                   parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (32,13): error CS0411: The type arguments for method 'P.C7<T1, T2>.C7()' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new C7<_,_> {1, "" }; 
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "C7<_,_>").WithArguments("P.C7<T1, T2>.C7()").WithLocation(32, 13),
+                // (32,22): error CS1950: The best overloaded Add method 'P.C7<T1, T2>.Add(T1)' for the collection initializer has some invalid arguments
+                //         new C7<_,_> {1, "" }; 
+                Diagnostic(ErrorCode.ERR_BadArgTypesForCollectionAdd, "1").WithArguments("P.C7<T1, T2>.Add(T1)").WithLocation(32, 22),
+                // (32,22): error CS1503: Argument 1: cannot convert from 'int' to 'T1'
+                //         new C7<_,_> {1, "" }; 
+                Diagnostic(ErrorCode.ERR_BadArgType, "1").WithArguments("1", "int", "T1").WithLocation(32, 22),
+                // (32,25): error CS1950: The best overloaded Add method 'P.C7<T1, T2>.Add(T1)' for the collection initializer has some invalid arguments
+                //         new C7<_,_> {1, "" }; 
+                Diagnostic(ErrorCode.ERR_BadArgTypesForCollectionAdd, @"""""").WithArguments("P.C7<T1, T2>.Add(T1)").WithLocation(32, 25),
+                // (32,25): error CS1503: Argument 1: cannot convert from 'string' to 'T1'
+                //         new C7<_,_> {1, "" }; 
+                Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "T1").WithLocation(32, 25)
+            });
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialObjectCreationTypeInference_WhereClauses ()

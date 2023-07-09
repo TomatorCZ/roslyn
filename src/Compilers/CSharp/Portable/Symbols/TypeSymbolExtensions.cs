@@ -1167,9 +1167,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             return result is object;
         }
 
-        public static bool ContainsContainingTypeTypeParameter(this TypeSymbol type)
+        public static bool ContainsContainingTypeTypeParameter(this TypeSymbol type, NamedTypeSymbol containingType)
         {
-            var result = type.VisitType(((t, _, _) => t.TypeKind == TypeKind.TypeParameter && type.ContainingSymbol.ContainingType.TypeParameters.Contains(t)), (object?)null);
+            var result = type.VisitType(((t, _, _) => t.TypeKind == TypeKind.TypeParameter && containingType.TypeParameters.Contains(t)), (object?)null);
             return result is object;
         }
 

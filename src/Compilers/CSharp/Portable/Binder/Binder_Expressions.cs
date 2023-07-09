@@ -288,7 +288,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 case BoundUnconvertedInferredObjectCreationExpression expr:
                     AnalyzedArguments arguments = AnalyzedArguments.GetInstance();
-                    BindArgumentsAndNames(expr.Arguments, diagnostics, arguments, allowArglist: true);
+                    BindArgumentsAndNames(expr.ArgumentsOpt, diagnostics, arguments, allowArglist: true);
                     result = BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.TypeSyntax, (NamedTypeSymbol)expr.Type, arguments, diagnostics, expr.InitializerOpt, expr.InitializerTypeOpt);
                     arguments.Free();
                     break;
@@ -5715,6 +5715,200 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
+        private Symbol getIndexerForTI(TypeSymbol type)
+        {
+            var objectInitializerMemberBinder = this.WithAdditionalFlags(BinderFlags.ObjectInitializerMember);
+            var lookupResult = LookupResult.GetInstance();
+            var discardedUsesite = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
+            objectInitializerMemberBinder.LookupInstanceMember(lookupResult, type, false, WellKnownMemberNames.Indexer, 0, false, ref discardedUsesite);
+
+            if (lookupResult.IsSingleViable)
+            {
+                return lookupResult.Symbols[0];
+            }
+            else 
+            { 
+                return null;
+            }
+        }
+
+        private Symbol getAddMethodForTI(ExpressionSyntax node, TypeSymbol type)
+        {
+            bool hasEnumerableInitializerType = CollectionInitializerTypeImplementsIEnumerable(type, node, BindingDiagnosticBag.Discarded);
+            if (!hasEnumerableInitializerType)
+                return null;
+
+            var collectionInitializerAddMethodBinder = this.WithAdditionalFlags(BinderFlags.CollectionInitializerAddMethod);
+            LookupResult lookupResult = LookupResult.GetInstance();
+            var useSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
+            collectionInitializerAddMethodBinder.LookupMembersWithFallback(lookupResult, type, WellKnownMemberNames.CollectionInitializerAddMethodName, arity: 0, useSiteInfo: ref useSiteInfo);
+
+            if (lookupResult.IsSingleViable && lookupResult.Symbols[0].Kind == SymbolKind.Method)
+            {
+                MethodSymbol method = (MethodSymbol)lookupResult.Symbols[0];
+                return method;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        private Symbol getPropertyOrFieldForTI(IdentifierNameSyntax identifier, TypeSymbol type)
+        {
+            var objectInitializerMemberBinder = this.WithAdditionalFlags(BinderFlags.ObjectInitializerMember);
+            var lookupResult = LookupResult.GetInstance();
+            var discardedUsesite = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
+            objectInitializerMemberBinder.LookupInstanceMember(lookupResult, type, false, identifier.Identifier.ValueText, 0, false, ref discardedUsesite);
+
+            if (lookupResult.IsSingleViable && (lookupResult.Symbols[0].Kind == SymbolKind.Property || lookupResult.Symbols[0].Kind == SymbolKind.Field))
+            {
+                return lookupResult.Symbols[0];
+            }
+
+            return null;
+        }
+
+        private (TypeWithAnnotations, RefKind, BoundExpression) getBoundsFromPropertyOrField(TypeSymbol type, AssignmentExpressionSyntax syntax)
+        {
+            var left = syntax.Left;
+            var right = syntax.Right;
+
+            var propOrField = getPropertyOrFieldForTI((IdentifierNameSyntax)left, type);
+            if (propOrField is null)
+                return default;
+
+            TypeWithAnnotations target;
+            if (propOrField.Kind == SymbolKind.Property)
+            {
+                target = ((PropertySymbol)propOrField).TypeWithAnnotations;
+            }
+            else
+            {
+                target = ((FieldSymbol)propOrField).TypeWithAnnotations;
+            }
+
+            var source = BindValue(right, BindingDiagnosticBag.Discarded, BindValueKind.RValue);
+
+            return (target, RefKind.None, source);
+        }
+
+        private ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> getBoundsFromIndexer(TypeSymbol type, AssignmentExpressionSyntax syntax)
+        {
+            Symbol indexer = getIndexerForTI(type);
+            if (indexer is null)
+                return default;
+
+            AnalyzedArguments indexerArgs = AnalyzedArguments.GetInstance();
+            BindArgumentsAndNames(((ImplicitElementAccessSyntax)syntax.Left).ArgumentList, BindingDiagnosticBag.Discarded, indexerArgs);
+            var argResults = OverloadResolution.AnalyzeArguments(indexer, indexerArgs, false, indexer.GetParameters().Last().IsParams);
+            if (!argResults.IsValid)
+                return default;
+
+            var builder = ArrayBuilder<(TypeWithAnnotations, RefKind, BoundExpression)>.GetInstance();
+            for (int i = 0; i < indexerArgs.Arguments.Count; i++)
+            {
+                builder.Add((indexer.GetParameters()[(argResults.ArgsToParamsOpt == null) ? i : argResults.ArgsToParamsOpt[i]].TypeWithAnnotations, RefKind.None, indexerArgs.Arguments[i]));
+            }
+
+            var rhs = BindValue(syntax.Right, BindingDiagnosticBag.Discarded, BindValueKind.RValue);
+            if (rhs.Kind == BoundKind.UnconvertedInferredObjectCreationExpression)
+                rhs = BindToNaturalType(rhs, BindingDiagnosticBag.Discarded);
+            builder.Add((((SourcePropertySymbol)indexer).TypeWithAnnotations, RefKind.None, rhs));
+
+            indexerArgs.Free();
+            return builder.ToImmutableAndFree();
+        }
+
+        private ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> getBoundsFromAddMethod(TypeSymbol type, ExpressionSyntax initializer)
+        {
+            Symbol addMethod = getAddMethodForTI(initializer, type);
+            if (addMethod is null)
+                return default;
+
+            AnalyzedArguments args = AnalyzedArguments.GetInstance();
+            if (initializer.Kind() == SyntaxKind.ComplexElementInitializerExpression)
+            {
+                args.Arguments.AddRange(((InitializerExpressionSyntax)initializer).Expressions.Select(x => BindValue(x, BindingDiagnosticBag.Discarded, BindValueKind.RValue)));
+            }
+            else
+            {
+                args.Arguments.Add(BindValue(initializer, BindingDiagnosticBag.Discarded, BindValueKind.RValue));
+            }
+
+            var argResults = OverloadResolution.AnalyzeArguments(addMethod, args, false, addMethod.GetParameters().Last().IsParams);
+            if (!argResults.IsValid)
+                return default;
+
+            var builder = ArrayBuilder<(TypeWithAnnotations, RefKind, BoundExpression)>.GetInstance();
+            for (int i = 0; i < args.Arguments.Count; i++)
+            {
+                builder.Add((addMethod.GetParameters()[(argResults.ArgsToParamsOpt == null) ? i : argResults.ArgsToParamsOpt[i]].TypeWithAnnotations, RefKind.None, args.Arguments[i]));
+            }
+
+            args.Free();
+            return builder.ToImmutableAndFree();
+        }
+
+        private ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> getInitializerInfo(
+            InitializerExpressionSyntax syntax,
+            TypeSymbol type,
+            SyntaxNode typeSyntax)
+        {
+            switch (syntax.Kind())
+            {
+                case SyntaxKind.ObjectInitializerExpression:
+                    return getObjectInitializerInfo();
+                case SyntaxKind.CollectionInitializerExpression:
+                    return getCollectionInitializerInfo();
+                default:
+                    return default;
+            }
+
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> getObjectInitializerInfo()
+            {
+                var result = ArrayBuilder<(TypeWithAnnotations, RefKind, BoundExpression)>.GetInstance();
+
+                foreach (var memberInitializer in syntax.Expressions)
+                {
+                    if (memberInitializer.Kind() == SyntaxKind.SimpleAssignmentExpression)
+                    {
+                        var assignment = (AssignmentExpressionSyntax)memberInitializer;
+                        var left = assignment.Left;
+
+                        if (left.Kind() == SyntaxKind.IdentifierName)
+                        {
+                            var item = getBoundsFromPropertyOrField(type, assignment);
+                            if (item != default)
+                                result.AddRange(item);
+                        }
+                        else if (left.Kind() == SyntaxKind.ImplicitElementAccess)
+                        {
+                            var item = getBoundsFromIndexer(type, assignment);
+                            if (!item.IsDefault)
+                                result.AddRange(item);
+                        }
+                    }
+                }
+
+                return result.ToImmutableAndFree();
+            }
+
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> getCollectionInitializerInfo()
+            {
+                var result = ArrayBuilder<(TypeWithAnnotations, RefKind, BoundExpression)>.GetInstance();
+
+                foreach (var memberInitializer in syntax.Expressions)
+                {
+                    var item = getBoundsFromAddMethod(type, memberInitializer);
+                    if (!item.IsDefault)
+                        result.AddRange(item);
+                }
+
+                return result.ToImmutableAndFree();
+            }
+        }
+
         public BoundExpression BindClassCreationExpression(
             SyntaxNode node,
             string typeName,
@@ -5729,6 +5923,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             TypeSymbol destinationType = default
             )
         {
+            bool inferred = type.IsInferred();
             BoundExpression result = null;
             bool hasErrors = type.IsErrorType();
             if (type.IsAbstract)
@@ -5797,12 +5992,16 @@ namespace Microsoft.CodeAnalysis.CSharp
                     out ImmutableArray<MethodSymbol> candidateConstructors,
                     allowProtectedConstructorsOfBaseType: false,
                     suppressUnsupportedRequiredMembersError: false,
-                    valueKind: valueKind,
-                    destinationType: destinationType) &&
+                    valueKind: inferred ? valueKind : default,
+                    destinationType: inferred ? destinationType : default,
+                    analyzedInitializers: (inferred && initializerSyntaxOpt is not null) ? getInitializerInfo(initializerSyntaxOpt, initializerTypeOpt is null ? type.OriginalDefinition : initializerTypeOpt.IsInferred() ? initializerTypeOpt.OriginalDefinition : initializerTypeOpt, typeNode) : default) &&
                 !type.IsAbstract && !analyzedArguments.HasDynamicArgument)
             {
                 var method = memberResolutionResult.Member;
+                if (initializerTypeOpt is not null && initializerTypeOpt.Equals(type, TypeCompareKind.ConsiderEverything2))
+                    initializerTypeOpt = method.ContainingType;
                 type = method.ContainingType;
+
 
                 bool hasError = false;
 
@@ -5891,8 +6090,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 if (initializerSyntaxOpt != null)
                 {
+                    var initializerType = initializerTypeOpt ?? type;
+                    if (initializerType.IsInferred())
+                        initializerType = initializerType.OriginalDefinition;
                     return BindInitializerExpression(syntax: initializerSyntaxOpt,
-                                                     type: initializerTypeOpt ?? type,
+                                                     type: initializerType,
                                                      typeSyntax: typeNode,
                                                      isForNewInstance: true,
                                                      diagnostics: diagnostics);
@@ -6128,7 +6330,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             bool allowProtectedConstructorsOfBaseType,
             bool suppressUnsupportedRequiredMembersError, // Last to make named arguments more convenient.
             BindValueKind valueKind = default,
-            TypeSymbol destinationType = default) 
+            TypeSymbol destinationType = default,
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default) 
         {
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
@@ -6146,7 +6349,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (candidateConstructors.Any())
             {
                 // We have at least one accessible candidate constructor, perform overload resolution with accessible candidateConstructors.
-                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
+                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
 
                 if (result.Succeeded)
                 {
@@ -6161,7 +6364,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // We might have a best match constructor which is inaccessible.
                 // Try overload resolution with all instance constructors to generate correct diagnostics and semantic info for this case.
                 OverloadResolutionResult<MethodSymbol> inaccessibleResult = OverloadResolutionResult<MethodSymbol>.GetInstance();
-                this.OverloadResolution.ObjectCreationOverloadResolution(allInstanceConstructors, analyzedArguments, inaccessibleResult, ref useSiteInfo);
+                this.OverloadResolution.ObjectCreationOverloadResolution(allInstanceConstructors, analyzedArguments, inaccessibleResult, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
 
                 if (inaccessibleResult.Succeeded)
                 {

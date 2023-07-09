@@ -6207,19 +6207,18 @@ namespace Microsoft.CodeAnalysis.CSharp
 
     internal sealed partial class BoundUnconvertedInferredObjectCreationExpression : BoundExpression
     {
-        public BoundUnconvertedInferredObjectCreationExpression(SyntaxNode syntax, String typeName, ArgumentListSyntax arguments, InitializerExpressionSyntax? initializerOpt, TypeSymbol? initializerTypeOpt, SyntaxNode typeSyntax, BindingDiagnosticBag diagnostics, Binder binder, TypeSymbol type, bool hasErrors)
+        public BoundUnconvertedInferredObjectCreationExpression(SyntaxNode syntax, String typeName, ArgumentListSyntax? argumentsOpt, InitializerExpressionSyntax? initializerOpt, TypeSymbol? initializerTypeOpt, SyntaxNode typeSyntax, BindingDiagnosticBag diagnostics, Binder binder, TypeSymbol type, bool hasErrors)
             : base(BoundKind.UnconvertedInferredObjectCreationExpression, syntax, type, hasErrors)
         {
 
             RoslynDebug.Assert(typeName is object, "Field 'typeName' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
-            RoslynDebug.Assert(arguments is object, "Field 'arguments' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(typeSyntax is object, "Field 'typeSyntax' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(diagnostics is object, "Field 'diagnostics' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(type is object, "Field 'type' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
 
             this.TypeName = typeName;
-            this.Arguments = arguments;
+            this.ArgumentsOpt = argumentsOpt;
             this.InitializerOpt = initializerOpt;
             this.InitializerTypeOpt = initializerTypeOpt;
             this.TypeSyntax = typeSyntax;
@@ -6227,19 +6226,18 @@ namespace Microsoft.CodeAnalysis.CSharp
             this.Binder = binder;
         }
 
-        public BoundUnconvertedInferredObjectCreationExpression(SyntaxNode syntax, String typeName, ArgumentListSyntax arguments, InitializerExpressionSyntax? initializerOpt, TypeSymbol? initializerTypeOpt, SyntaxNode typeSyntax, BindingDiagnosticBag diagnostics, Binder binder, TypeSymbol type)
+        public BoundUnconvertedInferredObjectCreationExpression(SyntaxNode syntax, String typeName, ArgumentListSyntax? argumentsOpt, InitializerExpressionSyntax? initializerOpt, TypeSymbol? initializerTypeOpt, SyntaxNode typeSyntax, BindingDiagnosticBag diagnostics, Binder binder, TypeSymbol type)
             : base(BoundKind.UnconvertedInferredObjectCreationExpression, syntax, type)
         {
 
             RoslynDebug.Assert(typeName is object, "Field 'typeName' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
-            RoslynDebug.Assert(arguments is object, "Field 'arguments' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(typeSyntax is object, "Field 'typeSyntax' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(diagnostics is object, "Field 'diagnostics' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(type is object, "Field 'type' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
 
             this.TypeName = typeName;
-            this.Arguments = arguments;
+            this.ArgumentsOpt = argumentsOpt;
             this.InitializerOpt = initializerOpt;
             this.InitializerTypeOpt = initializerTypeOpt;
             this.TypeSyntax = typeSyntax;
@@ -6249,7 +6247,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public new TypeSymbol Type => base.Type!;
         public String TypeName { get; }
-        public ArgumentListSyntax Arguments { get; }
+        public ArgumentListSyntax? ArgumentsOpt { get; }
         public InitializerExpressionSyntax? InitializerOpt { get; }
         public TypeSymbol? InitializerTypeOpt { get; }
         public SyntaxNode TypeSyntax { get; }
@@ -6259,11 +6257,11 @@ namespace Microsoft.CodeAnalysis.CSharp
         [DebuggerStepThrough]
         public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitUnconvertedInferredObjectCreationExpression(this);
 
-        public BoundUnconvertedInferredObjectCreationExpression Update(String typeName, ArgumentListSyntax arguments, InitializerExpressionSyntax? initializerOpt, TypeSymbol? initializerTypeOpt, SyntaxNode typeSyntax, BindingDiagnosticBag diagnostics, Binder binder, TypeSymbol type)
+        public BoundUnconvertedInferredObjectCreationExpression Update(String typeName, ArgumentListSyntax? argumentsOpt, InitializerExpressionSyntax? initializerOpt, TypeSymbol? initializerTypeOpt, SyntaxNode typeSyntax, BindingDiagnosticBag diagnostics, Binder binder, TypeSymbol type)
         {
-            if (typeName != this.TypeName || arguments != this.Arguments || initializerOpt != this.InitializerOpt || !TypeSymbol.Equals(initializerTypeOpt, this.InitializerTypeOpt, TypeCompareKind.ConsiderEverything) || typeSyntax != this.TypeSyntax || diagnostics != this.Diagnostics || binder != this.Binder || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
+            if (typeName != this.TypeName || argumentsOpt != this.ArgumentsOpt || initializerOpt != this.InitializerOpt || !TypeSymbol.Equals(initializerTypeOpt, this.InitializerTypeOpt, TypeCompareKind.ConsiderEverything) || typeSyntax != this.TypeSyntax || diagnostics != this.Diagnostics || binder != this.Binder || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
             {
-                var result = new BoundUnconvertedInferredObjectCreationExpression(this.Syntax, typeName, arguments, initializerOpt, initializerTypeOpt, typeSyntax, diagnostics, binder, type, this.HasErrors);
+                var result = new BoundUnconvertedInferredObjectCreationExpression(this.Syntax, typeName, argumentsOpt, initializerOpt, initializerTypeOpt, typeSyntax, diagnostics, binder, type, this.HasErrors);
                 result.CopyAttributes(this);
                 return result;
             }
@@ -11444,7 +11442,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             TypeSymbol? initializerTypeOpt = this.VisitType(node.InitializerTypeOpt);
             TypeSymbol? type = this.VisitType(node.Type);
-            return node.Update(node.TypeName, node.Arguments, node.InitializerOpt, initializerTypeOpt, node.TypeSyntax, node.Diagnostics, node.Binder, type);
+            return node.Update(node.TypeName, node.ArgumentsOpt, node.InitializerOpt, initializerTypeOpt, node.TypeSyntax, node.Diagnostics, node.Binder, type);
         }
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
@@ -13620,12 +13618,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
             {
-                updatedNode = node.Update(node.TypeName, node.Arguments, node.InitializerOpt, initializerTypeOpt, node.TypeSyntax, node.Diagnostics, node.Binder, infoAndType.Type!);
+                updatedNode = node.Update(node.TypeName, node.ArgumentsOpt, node.InitializerOpt, initializerTypeOpt, node.TypeSyntax, node.Diagnostics, node.Binder, infoAndType.Type!);
                 updatedNode.TopLevelNullability = infoAndType.Info;
             }
             else
             {
-                updatedNode = node.Update(node.TypeName, node.Arguments, node.InitializerOpt, initializerTypeOpt, node.TypeSyntax, node.Diagnostics, node.Binder, node.Type);
+                updatedNode = node.Update(node.TypeName, node.ArgumentsOpt, node.InitializerOpt, initializerTypeOpt, node.TypeSyntax, node.Diagnostics, node.Binder, node.Type);
             }
             return updatedNode;
         }
@@ -15979,7 +15977,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public override TreeDumperNode VisitUnconvertedInferredObjectCreationExpression(BoundUnconvertedInferredObjectCreationExpression node, object? arg) => new TreeDumperNode("unconvertedInferredObjectCreationExpression", null, new TreeDumperNode[]
         {
             new TreeDumperNode("typeName", node.TypeName, null),
-            new TreeDumperNode("arguments", node.Arguments, null),
+            new TreeDumperNode("argumentsOpt", node.ArgumentsOpt, null),
             new TreeDumperNode("initializerOpt", node.InitializerOpt, null),
             new TreeDumperNode("initializerTypeOpt", node.InitializerTypeOpt, null),
             new TreeDumperNode("typeSyntax", node.TypeSyntax, null),

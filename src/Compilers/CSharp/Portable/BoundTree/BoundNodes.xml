@@ -1843,7 +1843,7 @@
   <Node Name="BoundUnconvertedInferredObjectCreationExpression" Base="BoundExpression">
     <Field Name="Type" Type="TypeSymbol" Override="true" Null="disallow"/>
     <Field Name="TypeName" Type="String" Null="disallow"/>
-    <Field Name="Arguments" Type="ArgumentListSyntax"/>
+    <Field Name="ArgumentsOpt" Type="ArgumentListSyntax?" Null="allow"/>
     <Field Name="InitializerOpt" Type="InitializerExpressionSyntax?" Null="allow"/>
     <Field Name="InitializerTypeOpt" Type="TypeSymbol?" Null="allow"/>
     <Field Name="TypeSyntax" Type="SyntaxNode" Null="disallow"/>

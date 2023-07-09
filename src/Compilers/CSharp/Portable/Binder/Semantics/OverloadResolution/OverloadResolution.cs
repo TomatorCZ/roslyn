@@ -99,18 +99,18 @@ namespace Microsoft.CodeAnalysis.CSharp
         // Perform overload resolution on the given method group, with the given arguments and
         // names. The names can be null if no names were supplied to any arguments.
         public void ObjectCreationOverloadResolution(ImmutableArray<MethodSymbol> constructors, AnalyzedArguments arguments, OverloadResolutionResult<MethodSymbol> result, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,BindValueKind valueKind = default,
-            TypeSymbol destinationType = default)
+            TypeSymbol destinationType = default, ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default)
         {
             var results = result.ResultsBuilder;
 
             // First, attempt overload resolution not getting complete results.
-            PerformObjectCreationOverloadResolution(results, constructors, arguments, false, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
+            PerformObjectCreationOverloadResolution(results, constructors, arguments, false, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
 
             if (!OverloadResolutionResultIsValid(results, arguments.HasDynamicArgument))
             {
                 // We didn't get a single good result. Get full results of overload resolution and return those.
                 result.Clear();
-                PerformObjectCreationOverloadResolution(results, constructors, arguments, true, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
+                PerformObjectCreationOverloadResolution(results, constructors, arguments, true, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
             }
         }
 
@@ -714,7 +714,7 @@ outerDefault:
 
         private void AddConstructorToCandidateSet(MethodSymbol constructor, ArrayBuilder<MemberResolutionResult<MethodSymbol>> results,
             AnalyzedArguments arguments, bool completeResults, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,BindValueKind valueKind = default,
-            TypeSymbol destinationType = default)
+            TypeSymbol destinationType = default, ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default)
         {
             // Filter out constructors with unsupported metadata.
             if (constructor.HasUnsupportedMetadata)
@@ -727,13 +727,13 @@ outerDefault:
                 return;
             }
 
-            var normalResult = IsConstructorApplicableInNormalForm(constructor, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
+            var normalResult = IsConstructorApplicableInNormalForm(constructor, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
             var result = normalResult;
             if (!normalResult.IsValid)
             {
                 if (IsValidParams(constructor))
                 {
-                    var expandedResult = IsConstructorApplicableInExpandedForm(constructor, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
+                    var expandedResult = IsConstructorApplicableInExpandedForm(constructor, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
                     if (expandedResult.IsValid || completeResults)
                     {
                         result = expandedResult;
@@ -760,7 +760,8 @@ outerDefault:
             bool completeResults,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
             BindValueKind valueKind = default,
-            TypeSymbol destinationType = default)
+            TypeSymbol destinationType = default,
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default)
         {
             var argumentAnalysis = AnalyzeArguments(constructor, arguments, isMethodGroupConversion: false, expanded: false); // Constructors are never involved in method group conversion.
             if (!argumentAnalysis.IsValid)
@@ -793,7 +794,8 @@ outerDefault:
                 completeResults: completeResults,
                 useSiteInfo: ref useSiteInfo,
                 valueKind: valueKind,
-                destinationType: destinationType);
+                destinationType: destinationType,
+                analyzedInitializers: analyzedInitializers);
         }
 
         private MemberResolutionResult<MethodSymbol> IsConstructorApplicableInExpandedForm(
@@ -802,7 +804,8 @@ outerDefault:
             bool completeResults,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
             BindValueKind valueKind = default,
-            TypeSymbol destinationType = default)
+            TypeSymbol destinationType = default,
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default)
         {
             var argumentAnalysis = AnalyzeArguments(constructor, arguments, isMethodGroupConversion: false, expanded: true);
             if (!argumentAnalysis.IsValid)
@@ -838,7 +841,8 @@ outerDefault:
                 completeResults: completeResults,
                 useSiteInfo: ref useSiteInfo,
                 valueKind: valueKind,
-                destinationType: destinationType);
+                destinationType: destinationType,
+                analyzedInitializers: analyzedInitializers);
 
             return result.IsValid ? new MemberResolutionResult<MethodSymbol>(result.Member, result.LeastOverriddenMember, MemberAnalysisResult.ExpandedForm(result.Result.ArgsToParamsOpt, result.Result.ConversionsOpt, hasAnyRefOmittedArgument: false), false) : result;
         }
@@ -1445,7 +1449,8 @@ outerDefault:
             bool completeResults,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
             BindValueKind valueKind = default,
-            TypeSymbol destinationType = default)
+            TypeSymbol destinationType = default,
+            ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default)
         {
             // SPEC: The instance constructor to invoke is determined using the overload resolution 
             // SPEC: rules of 7.5.3. The set of candidate instance constructors consists of all 
@@ -1455,7 +1460,7 @@ outerDefault:
 
             foreach (MethodSymbol constructor in constructors)
             {
-                AddConstructorToCandidateSet(constructor, results, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType);
+                AddConstructorToCandidateSet(constructor, results, arguments, completeResults, ref useSiteInfo, valueKind: valueKind, destinationType: destinationType, analyzedInitializers: analyzedInitializers);
             }
 
             ReportUseSiteInfo(results, ref useSiteInfo);
@@ -3738,7 +3743,7 @@ outerDefault:
                     else
                     {
                         var analyzedArgs = AnalyzedArguments.GetInstance();
-                        expr.Binder.BindArgumentsAndNames(expr.Arguments, expr.Diagnostics, analyzedArgs, true);
+                        expr.Binder.BindArgumentsAndNames(expr.ArgumentsOpt, expr.Diagnostics, analyzedArgs, true);
                         var type = expr.Binder.BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.TypeSyntax, (NamedTypeSymbol)expr.Type, analyzedArgs, BindingDiagnosticBag.Discarded, expr.InitializerOpt, expr.InitializerTypeOpt, true, destinationType: parameterTypes[i].Type);
                         analyzedArgs.Free();
                         if (!type.HasAnyErrors)
@@ -3746,6 +3751,45 @@ outerDefault:
                     }
                 }
             }
+        }
+
+        ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> bindInitializersWithTarget(ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> initializer, ImmutableArray<TypeParameterSymbol> typeParams)
+        {
+            if (initializer.IsDefault)
+                return initializer;
+            var result = ArrayBuilder<(TypeWithAnnotations, RefKind, BoundExpression)>.GetInstance();
+            for (int i = 0; i < initializer.Length; i++)
+            {
+                if (initializer[i].Item3.Kind == BoundKind.UnconvertedInferredObjectCreationExpression)
+                {
+                    var expr = (BoundUnconvertedInferredObjectCreationExpression)initializer[i].Item3;
+
+                    if (initializer[i].Item1.Type.ContainsMethodTypeParameter() || initializer[i].Item1.Type.VisitType((t, _, _) => typeParams.Contains(t), (object?)null) is object)
+                    {
+                        var type = expr.Binder.BindToNaturalType(expr, BindingDiagnosticBag.Discarded);
+                        if (!type.HasAnyErrors)
+                            result.Add((initializer[i].Item1, initializer[i].Item2, new BoundConversion(expr.Syntax, expr, Conversion.InferredObjectCreation, false, false, null, null, type.Type)));
+                        else
+                            result.Add(initializer[i]);
+                    }
+                    else
+                    {
+                        var analyzedArgs = AnalyzedArguments.GetInstance();
+                        expr.Binder.BindArgumentsAndNames(expr.ArgumentsOpt, expr.Diagnostics, analyzedArgs, true);
+                        var type = expr.Binder.BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.TypeSyntax, (NamedTypeSymbol)expr.Type, analyzedArgs, BindingDiagnosticBag.Discarded, expr.InitializerOpt, expr.InitializerTypeOpt, true, destinationType: initializer[i].Item1.Type);
+                        analyzedArgs.Free();
+                        if (!type.HasAnyErrors)
+                            result.Add((initializer[i].Item1, initializer[i].Item2, new BoundConversion(expr.Syntax, expr, Conversion.TargetTypedInferredObjectCreation, false, false, null, null, type.Type)));
+                        else
+                            result.Add(initializer[i]);
+                    }
+                }
+                else
+                {
+                    result.Add(initializer[i]);
+                }
+            }
+            return result.ToImmutableAndFree();
         }
 
         private MemberResolutionResult<MethodSymbol> IsConstructorApplicable(
@@ -3759,10 +3803,12 @@ outerDefault:
         bool completeResults,
         ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
         BindValueKind valueKind = default,
-        TypeSymbol destinationType = default)
+        TypeSymbol destinationType = default,
+        ImmutableArray<(TypeWithAnnotations, RefKind, BoundExpression)> analyzedInitializers = default)
         {
             var arguments1 = AnalyzedArguments.GetInstance(arguments);
             bindWithTarget(arguments1, parameters.ParameterTypes, constructor.ContainingType.TypeParameters);
+            analyzedInitializers = bindInitializersWithTarget(analyzedInitializers, constructor.ContainingType.TypeParameters);
             NamedTypeSymbol contatiningType = constructor.ContainingType;
             EffectiveParameters effectiveParameters;
             bool hasTypeArgumentsInferredFromFunctionType = false;
@@ -3808,7 +3854,8 @@ outerDefault:
                         ref useSiteInfo,
                         GetInferredSymbols(contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics),
                         contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics,
-                        targetContraint: targetConstraint);
+                        targetContraint: targetConstraint,
+                        analyzedInitializers: analyzedInitializers);
 
                     if (inferenceResult.Success)
                     {
