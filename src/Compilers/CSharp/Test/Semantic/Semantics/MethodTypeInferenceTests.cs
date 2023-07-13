@@ -2013,7 +2013,7 @@ class P
             CheckCallSite(model, f_ctors[0], f_expect_ctors);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_Initializer()
         { 
             var source = """
@@ -2099,6 +2099,27 @@ class P
                 //         new C7<_,_> {1, "" }; 
                 Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "T1").WithLocation(32, 25)
             });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var ctors = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            var expected_ctors = new[] {
+                "P.C5<System.Int32, System.String, System.Int32>.C5()",
+                "P.C5<System.Int32, System.String, System.Int32>.C5()",
+                "P.C5<System.Int32, System.String, System.String>.C5()",
+                "P.C5<System.Int32, System.Int32, System.Int32>.C5()",
+                "P.C9<System.Int32>.C9()",
+                "P.C5<P.C5<System.Int32, System.Int32, System.Int32>, System.Int32, System.Int32>.C5()",
+                "P.C5<System.Int32, System.Int32, System.Int32>.C5()",
+                "P.C6<System.Int32, System.String>.C6()",
+                null,
+                "P.C8<System.Int32, System.String>.C8()",
+                "System.NotImplementedException.NotImplementedException()",
+                "System.NotImplementedException.NotImplementedException()"
+            };
+
+            CheckCallSites(model, ctors, expected_ctors);
         }
 
         [Fact(Skip = "Not implemented yet")]
