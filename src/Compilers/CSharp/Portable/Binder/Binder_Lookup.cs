@@ -1413,7 +1413,7 @@ symIsHidden:;
             {
                 return LookupResult.Empty();
             }
-            else if ((options & LookupOptions.IgnoreArity) == 0 && WrongArity(symbol, arity, diagnose, options, out diagInfo))
+            else if (WrongArity(symbol, arity, diagnose, options, out diagInfo))
             {
                 return LookupResult.WrongArity(symbol, diagInfo);
             }
@@ -1778,6 +1778,10 @@ symIsHidden:;
                             {
                                 // The non-generic {1} '{0}' cannot be used with type arguments
                                 diagInfo = diagnose ? new CSDiagnosticInfo(ErrorCode.ERR_HasNoTypeVars, namedType, MessageID.IDS_SK_TYPE.Localize()) : null;
+                            }
+                            else if ((options & LookupOptions.IgnoreArity) != 0)
+                            {
+                                break;
                             }
                             else
                             {

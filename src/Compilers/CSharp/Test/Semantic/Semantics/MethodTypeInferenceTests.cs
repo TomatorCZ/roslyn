@@ -1834,7 +1834,7 @@ class Program2
     {
         public C1(T p1) {}
     }
-    class C1
+    class C1<T1, T2>
     {
         public C1(int p1) {}
     }
@@ -1845,9 +1845,9 @@ class Program2
                 source,
                 parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
             compilation.VerifyDiagnostics(new[] {
-                // (25,13): error CS0104: 'C1<>' is an ambiguous reference between 'Program2.C1<T>' and 'Program2.C1'
+                //(25,13): error CS0104: 'C1<>' is an ambiguous reference between 'Program2.C1<T>' and 'Program2.C1<T1, T2>'
                 //         new C1<>(1);
-                Diagnostic(ErrorCode.ERR_AmbigContext, "C1<>").WithArguments("C1<>", "Program2.C1<T>", "Program2.C1").WithLocation(25, 13)
+                Diagnostic(ErrorCode.ERR_AmbigContext, "C1<>").WithArguments("C1<>", "Program2.C1<T>", "Program2.C1<T1, T2>").WithLocation(25, 13)
             });
 
             var tree = compilation.SyntaxTrees.Single();
