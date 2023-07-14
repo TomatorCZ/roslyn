@@ -1800,9 +1800,68 @@ public class P
             CheckCallSites(model, constructors, callsites);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_DiamondOperator()
-        { }
+        {
+            var source = """
+class Program1
+{
+    void M() 
+    {
+        // Inferred: [T = int]
+        new C1<>(1);
+        // Inferred: [T1 = int, T2 = int]
+        new C2<>(1,1);
+    }
+    class C1<T> 
+    {
+        public C1(T p1) {}
+    }
+    class C2<T1, T2> 
+    {
+        public C2(T1 p1, T2 p2) {}
+    }
+}
+
+class Program2
+{
+    void M() 
+    {
+        //Error
+        new C1<>(1);
+    }
+    class C1<T> 
+    {
+        public C1(T p1) {}
+    }
+    class C1
+    {
+        public C1(int p1) {}
+    }
+}
+""";
+
+            var compilation = CreateCompilation(
+                source,
+                parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (25,13): error CS0104: 'C1<>' is an ambiguous reference between 'Program2.C1<T>' and 'Program2.C1'
+                //         new C1<>(1);
+                Diagnostic(ErrorCode.ERR_AmbigContext, "C1<>").WithArguments("C1<>", "Program2.C1<T>", "Program2.C1").WithLocation(25, 13)
+            });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var constructors = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            var expected_constructors = new[] {
+                "Program1.C1<System.Int32>.C1(System.Int32 p1)",
+                "Program1.C2<System.Int32, System.Int32>.C2(System.Int32 p1, System.Int32 p2)",
+                null
+            };
+
+            CheckCallSites(model, constructors, expected_constructors);
+        }
 
         [Fact]
         public void PartialObjectCreationTypeInference_Nested()

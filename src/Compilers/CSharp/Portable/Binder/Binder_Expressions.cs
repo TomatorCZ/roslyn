@@ -4496,11 +4496,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression bindObjectCreationExpression(ObjectCreationExpressionSyntax node, BindingDiagnosticBag diagnostics)
             {
                 var save = BindingDiagnosticBag.GetInstance(diagnostics.AccumulatesDiagnostics, diagnostics.AccumulatesDependencies);
-                var typeWithAnnotations = BindType(node.Type, save, allowInfrredType: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialConstructorTypeInference));
+                var typeWithAnnotations = BindType(node.Type, save, allowInfrredType: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialConstructorTypeInference), allowDiamond: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialConstructorTypeInference));
                 var type = typeWithAnnotations.Type;
                 var originalType = type;
 
-                if (type.IsInferred())
+                if (type.IsInferred() || type.IsUnboundGenericType())
                 {
                     if (type.TypeKind == TypeKindInternal.InferredType || (type.TypeKind == TypeKind.Delegate || type.TypeKind == TypeKind.Interface))
                     {
@@ -5923,7 +5923,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             TypeSymbol destinationType = default
             )
         {
-            bool inferred = type.IsInferred();
+            bool inferred = type.IsInferred() || type.IsUnboundGenericType;
             BoundExpression result = null;
             bool hasErrors = type.IsErrorType();
             if (type.IsAbstract)
@@ -6336,7 +6336,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
             CompoundUseSiteInfo<AssemblySymbol> useSiteInfo = GetNewCompoundUseSiteInfo(diagnostics);   
-            candidateConstructors = GetAccessibleConstructorsForOverloadResolution(typeContainingConstructors, allowProtectedConstructorsOfBaseType, out allInstanceConstructors, ref useSiteInfo);
+            candidateConstructors = GetAccessibleConstructorsForOverloadResolution(typeContainingConstructors.IsUnboundGenericType ? typeContainingConstructors.ConstructedFrom : typeContainingConstructors, allowProtectedConstructorsOfBaseType, out allInstanceConstructors, ref useSiteInfo);
 
             OverloadResolutionResult<MethodSymbol> result = OverloadResolutionResult<MethodSymbol>.GetInstance();
 

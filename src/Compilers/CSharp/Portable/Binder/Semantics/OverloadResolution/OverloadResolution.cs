@@ -3812,8 +3812,9 @@ outerDefault:
             NamedTypeSymbol contatiningType = constructor.ContainingType;
             EffectiveParameters effectiveParameters;
             bool hasTypeArgumentsInferredFromFunctionType = false;
+            bool isUnbound = contatiningType.Equals(contatiningType.OriginalDefinition, TypeCompareKind.ConsiderEverything);
 
-            if (contatiningType.Arity > 0 && contatiningType.IsInferred())
+            if (contatiningType.Arity > 0 && (contatiningType.IsInferred() || isUnbound))
             {
                 if (arguments1.HasDynamicArgument)
                 {
@@ -3853,7 +3854,7 @@ outerDefault:
                         arguments1.Arguments.ToImmutable(),
                         ref useSiteInfo,
                         GetInferredSymbols(contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics),
-                        contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics,
+                        !isUnbound ? contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics : ImmutableArray<TypeWithAnnotations>.Empty,
                         targetContraint: targetConstraint,
                         analyzedInitializers: analyzedInitializers,
                         useTypeParametersConstrains: true);

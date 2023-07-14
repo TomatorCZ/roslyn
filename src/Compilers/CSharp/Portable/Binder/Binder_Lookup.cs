@@ -1413,7 +1413,7 @@ symIsHidden:;
             {
                 return LookupResult.Empty();
             }
-            else if (WrongArity(symbol, arity, diagnose, options, out diagInfo))
+            else if ((options & LookupOptions.IgnoreArity) == 0 && WrongArity(symbol, arity, diagnose, options, out diagInfo))
             {
                 return LookupResult.WrongArity(symbol, diagInfo);
             }
