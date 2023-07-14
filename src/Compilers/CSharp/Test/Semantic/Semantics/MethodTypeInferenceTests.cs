@@ -2173,9 +2173,46 @@ public class C7 : C6<C7> {}
             CheckCallSites(model, ctors, expected_ctors);
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_Complex() 
-        { }
+        {
+            var source = """
+class Program
+{
+    void M() 
+    {
+        // Inferred: [T1 = int, T2 = int, T3 = int, T4 = int, T5 = C1<int>]
+        // Combinining type constraints from target, constructor, type argument list, object initializer and where clause to determine type of parameters
+        F1(new C9<_,_,_,int,_>(1) {Prop1 = 1},1);
+    }
+
+    void F1<T>(C1<T> p1, T p2) {}
+
+    class C1<T> {}
+
+    class C9<T1, T2, T3, T4, T5> : C1<T3> where T5 : C1<T4>
+    {
+        public C9(T1 p1) {}
+        public T2 Prop1 {get;set;}
+    }
+}
+""";
+
+            var compilation = CreateCompilation(
+                       source,
+                       parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics();
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var ctors = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            var expected_ctors = new[] {
+                "Program.C9<System.Int32, System.Int32, System.Int32, System.Int32, Program.C1<System.Int32>>.C9(System.Int32 p1)"
+            };
+
+            CheckCallSites(model, ctors, expected_ctors);
+        }
 
         [Fact]
         public void PartialObjectCreationTypeInference_Dynamic()
