@@ -3855,7 +3855,8 @@ outerDefault:
                         GetInferredSymbols(contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics),
                         contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics,
                         targetContraint: targetConstraint,
-                        analyzedInitializers: analyzedInitializers);
+                        analyzedInitializers: analyzedInitializers,
+                        useTypeParametersConstrains: true);
 
                     if (inferenceResult.Success)
                     {

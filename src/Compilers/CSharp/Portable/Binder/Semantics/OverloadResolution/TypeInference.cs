@@ -268,8 +268,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 for (int j = 0; j < constraints.Length; j++)
                 {
                     targets.Add(TypeWithAnnotations.Create(typeParameters[i]));
-                    sources.Add(new BoundTypeExpression(default, null, constraints[j]));
-                    bounds.Add(ExactOrShapeOrBoundsKind.LowerBound);
+                    sources.Add(new BoundTypeExpression(constraints[j].Type.GetNonNullSyntaxNode(), null, constraints[j]));
+                    bounds.Add(ExactOrShapeOrBoundsKind.UpperBound);
                 }
             }
         }
@@ -674,6 +674,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 {
                     foreach (var bound in collectedBound.ToList())
                     {
+                        if (source.Equals(bound, TypeCompareKind.ConsiderEverything))
+                            continue;
                         ExactOrBoundsInference(kind, bound, source, ref useSiteInfo);
                     }
                 }
@@ -685,7 +687,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 {
                     foreach (var bound in collectedBound.ToList())
                     {
-                        if (ContainsTypeVariable(bound))
+                        if (!source.Equals(bound, TypeCompareKind.ConsiderEverything) && ContainsTypeVariable(bound))
                             ExactOrBoundsInference(kind, source, bound, ref useSiteInfo);
                     }
                 }
@@ -1087,7 +1089,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             switch (kind)
             {
                 case DependencyKind.Function: return ref _functionDependenciesDirty;
-                case DependencyKind.Bound: return ref _shapeDependenciesDirty;
+                case DependencyKind.Bound: return ref _boundDependenciesDirty;
                 case DependencyKind.Shape: return ref _shapeDependenciesDirty;
                 default:
                     Debug.Assert(false);
@@ -2354,7 +2356,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private InferenceResult FixDependentParameters(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Shape) && (inferrer.AnyDependsOn(index, DependencyKind.Function) || inferrer.AnyDependsOn(index, DependencyKind.Bound)), ref useSiteInfo);
+            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Shape) && (inferrer.AnyDependsOn(index, DependencyKind.Function) || inferrer.AnyDependsOn(index, DependencyKind.Bound) || inferrer.AnyDependsOn(index, DependencyKind.Shape)), ref useSiteInfo);
         }
 
         private InferenceResult FixParameters(
@@ -2395,7 +2397,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             var lower = _lowerBounds[iParam];
             var upper = _upperBounds[iParam];
 
-            var best = Fix(_compilation, _conversions, typeVariable, _typeVariableShapes[iParam], exact, lower, upper, ref useSiteInfo);
+            var best = Fix(_compilation, _conversions, typeVariable, _typeVariableShapes[iParam], exact, lower, upper, ref useSiteInfo, new HashSet<TypeParameterSymbol>(_typeVariables.Where(x => x.Kind == SymbolKind.TypeParameter).Cast<TypeParameterSymbol>()));
             if (!best.Type.HasType)
             {
                 return false;
@@ -2405,7 +2407,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (_conversions.IncludeNullability)
             {
                 var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
-                var withoutNullability = Fix(_compilation, _conversions.WithNullability(false), typeVariable, _typeVariableShapes[iParam], exact, lower, upper, ref discardedUseSiteInfo).Type;
+                var withoutNullability = Fix(_compilation, _conversions.WithNullability(false), typeVariable, _typeVariableShapes[iParam], exact, lower, upper, ref discardedUseSiteInfo, new HashSet<TypeParameterSymbol>(_typeVariables.Where(x => x.Kind == SymbolKind.TypeParameter).Cast<TypeParameterSymbol>())).Type;
 
                 Debug.Assert(best.Type.Type.Equals(withoutNullability.Type, TypeCompareKind.IgnoreDynamicAndTupleNames | TypeCompareKind.IgnoreNullableModifiersForReferenceTypes));
             }
@@ -2427,7 +2429,8 @@ namespace Microsoft.CodeAnalysis.CSharp
            HashSet<TypeWithAnnotations>? exact,
            HashSet<TypeWithAnnotations>? lower,
            HashSet<TypeWithAnnotations>? upper,
-           ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+           ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+           HashSet<TypeParameterSymbol> typeParameters)
         {
             if (!shape.IsDefault)
             {
@@ -2447,6 +2450,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             lower = removeTypes(lower, static type => isFunctionType(type, out var functionType) && functionType.GetInternalDelegateType() is null);
+            lower = removeTypes(lower, type => type.Type.IsInferred() || type.Type.ContainsTypeParameters(typeParameters));
+            exact = removeTypes(exact, type => type.Type.IsInferred() || type.Type.ContainsTypeParameters(typeParameters));
+            upper = removeTypes(upper, type => type.Type.IsInferred() || type.Type.ContainsTypeParameters(typeParameters));
 
             if (!shape.IsDefault)
             {
