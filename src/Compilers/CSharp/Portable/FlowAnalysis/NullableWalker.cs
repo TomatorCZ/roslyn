@@ -6290,10 +6290,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // Re-infer method type parameters
                 if (method?.IsGenericMethod == true)
                 {
-                    if ((node is BoundCall { } call && !call.OriginalTypeArgsOpt.IsDefault && call.OriginalTypeArgsOpt.Any(x => x.Type.IsInferred())) 
-                        || HasImplicitTypeArguments(node))
+                    if (HasImplicitTypeArguments(node))
                     {
-                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded, (node as BoundCall)?.OriginalTypeArgsOpt ?? default);
+                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded);
                         parametersOpt = method.Parameters;
                     }
                     if (ConstraintsHelper.RequiresChecking(method))
@@ -7102,8 +7101,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<BoundExpression> arguments,
             ImmutableArray<RefKind> argumentRefKindsOpt,
             ImmutableArray<int> argsToParamsOpt,
-            bool expanded,
-            ImmutableArray<TypeWithAnnotations> hints = default)
+            bool expanded)
         {
             Debug.Assert(method.IsGenericMethod);
 
@@ -7137,8 +7135,6 @@ namespace Microsoft.CodeAnalysis.CSharp
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
             TypeInferenceResult result;
 
-            if (!hints.IsDefault)
-            {
                 result = TypeInferrer.InferMethod(
                 _binder,
                 _conversions,
@@ -7148,23 +7144,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 parameterRefKinds,
                 arguments,
                 ref discardedUseSiteInfo,
-                OverloadResolution.GetInferredSymbols(hints),
-                hints,
-                new InferenceExtensions(this));
-            }
-            else
-            {
-                result = TypeInferrer.InferMethod(
-                    _binder,
-                    _conversions,
-                    definition.TypeParameters,
-                    definition.ContainingType,
-                    parameterTypes,
-                    parameterRefKinds,
-                    arguments,
-                    ref discardedUseSiteInfo,
                     extensions: new InferenceExtensions(this));
-            }
+            
 
             //var result = MethodTypeInferrer.Infer(
             //    _binder,
