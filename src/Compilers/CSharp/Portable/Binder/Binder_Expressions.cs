@@ -6336,7 +6336,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
             CompoundUseSiteInfo<AssemblySymbol> useSiteInfo = GetNewCompoundUseSiteInfo(diagnostics);   
-            candidateConstructors = GetAccessibleConstructorsForOverloadResolution(typeContainingConstructors.IsUnboundGenericType ? typeContainingConstructors.ConstructedFrom : typeContainingConstructors, allowProtectedConstructorsOfBaseType, out allInstanceConstructors, ref useSiteInfo);
+            candidateConstructors = GetAccessibleConstructorsForOverloadResolution(typeContainingConstructors.IsUnboundGenericType || typeContainingConstructors.IsInferred() ? typeContainingConstructors.ConstructedFrom : typeContainingConstructors, allowProtectedConstructorsOfBaseType, out allInstanceConstructors, ref useSiteInfo);
 
             OverloadResolutionResult<MethodSymbol> result = OverloadResolutionResult<MethodSymbol>.GetInstance();
 

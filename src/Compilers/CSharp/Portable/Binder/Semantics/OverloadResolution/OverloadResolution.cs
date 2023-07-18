@@ -751,7 +751,7 @@ outerDefault:
         private static bool IsConstructorInferred(MethodSymbol constructor) 
         {
             return (!constructor.ContainingType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics.IsDefault
-                || constructor.ContainingType.IsInferred());
+                && constructor.ContainingType.IsInferred());
         }
 
         private MemberResolutionResult<MethodSymbol> IsConstructorApplicableInNormalForm(
