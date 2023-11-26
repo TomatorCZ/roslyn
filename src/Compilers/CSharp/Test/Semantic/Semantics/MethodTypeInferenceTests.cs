@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ICSharpCode.Decompiler.Metadata;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
@@ -1220,7 +1221,7 @@ class P
     }
 
     static void F<T>(T p) {}
-    }
+}
 
 class A {}
 class _ {}
@@ -1307,7 +1308,7 @@ class P
         }
 
         [Fact]
-        public void PartialMethodTypeInference_Simple() 
+        public void PartialMethodTypeInference_Simple()
         {
             var source = """
 using System;
@@ -2318,7 +2319,7 @@ class P {
     {
         new F1<_,_>(""); // Error: Can't infer T2
         new F1<int, string>(""); // Error: int != string
-        new F1<byte,_>(257); // Error: Can't infer T2
+        new F1<byte,_>(257); // Error: Can't infer T2    
         F2(new F1<_,_>("")); // Error
         F3(new F1<_,_>(1)); // Error
         new F1<_,_>(new F1<_,_>(1)); // Error
@@ -2333,14 +2334,14 @@ class P {
                 source,
                 parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
             compilation.VerifyDiagnostics(new[] {
-                    // (4,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-                    //         new F1<_,_>(""); // Error: Can't infer T2
-                    Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(4, 13),
-                    // (5,29): error CS1503: Argument 1: cannot convert from 'string' to 'int'
-                    //         new F1<int, string>(""); // Error: int != string
-                    Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 29),
-                    // (6,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-                    //         new F1<byte,_>(257); // Error: Can't infer T2
+                // (4,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,_>(""); // Error: Can't infer T2
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(4, 13),
+                // (5,29): error CS1503: Argument 1: cannot convert from 'string' to 'int'
+                //         new F1<int, string>(""); // Error: int != string
+                Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 29),
+                // (6,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<byte,_>(257); // Error: Can't infer T2    
                 Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(6, 13),
                 // (7,9): error CS0411: The type arguments for method 'P.F2<T1>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
                 //         F2(new F1<_,_>("")); // Error
@@ -2354,9 +2355,122 @@ class P {
             });
         }
 
-        [Fact(Skip = "Not implemented yet")]
+        [Fact]
         public void PartialObjectCreationTypeInference_Nullable()
-        { }
+        {
+            var source = """
+#nullable enable
+class P
+{
+    void M() 
+    {
+        // Inferred: [T = string?]
+        string? temp1 = null;
+        var temp2 = new C1<_?>(temp1);
+        C1<string?> temp3 = temp2;
+
+        // Inferred: [T = string?]
+        temp3 = new C1<_?>(temp1);
+
+        //Inferred: [T = string?]
+        F1(new C2<_?>(), temp1);
+
+        //Inferred: [T = string?]
+        new C3<_?> {Prop1 = temp1};
+        
+    }
+
+    void F1<T>(C2<T> p1, T p2) {}
+
+    class C2<T> 
+    {
+        public C2() {}
+    }
+
+    class C1<T>
+    {
+        public C1(T p1) {}
+    }
+
+    class C3<T> 
+    {
+       public T Prop1 {get;set;}
+    }
+}
+""";
+
+            var compilation = CreateCompilation(
+               source,
+               parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (36,17): warning CS8618: Non-nullable property 'Prop1' must contain a non-null value when exiting constructor. Consider declaring the property as nullable.
+                //        public T Prop1 {get;set;}
+                Diagnostic(ErrorCode.WRN_UninitializedNonNullableField, "Prop1").WithArguments("property", "Prop1").WithLocation(36, 17)
+            });
+
+            var tree = compilation.SyntaxTrees.Single();
+            var model = compilation.GetSemanticModel(tree);
+
+            var ctors = tree.GetRoot().DescendantNodes().OfType<ObjectCreationExpressionSyntax>().ToArray();
+            var expected_ctors = new[] {
+                "P.C1<System.String?>.C1(System.String? p1)",
+                "P.C1<System.String?>.C1(System.String? p1)",
+                "P.C2<System.String?>.C2()",
+                "P.C3<System.String?>.C3()"
+            };
+
+            CheckCallSites(model, ctors, expected_ctors);
+        }
+
+        [Fact]
+        public void PartialObjectCreationTypeInference_DiamondNullable()
+        {
+            var source = """
+#nullable enable
+class P
+{
+    void M() 
+    {
+        C1<int> temp1 = new(1);
+        temp1 = null;
+        //Using parameters
+        var temp2 = new C1<>(temp1);
+        C1<C1<int>> temp3 = temp2;
+
+        //Using constraints
+        string temp4 = "";
+        temp4 = null;
+        var temp5 = new C2<>(temp4);
+        C2<C1<string>, string> temp6 = temp5;
+
+        //Using target
+
+        //Using initializers
+    }
+
+    class C1<T> { public C1(T p1) {} }
+    class C2<T1, T2> where T1 : C1<T2> { public C2(T2 p1) {} }
+}
+""";
+
+            var compilation = CreateCompilation(
+               source,
+               parseOptions: TestOptions.RegularPreview.WithFeature(nameof(MessageID.IDS_FeaturePartialConstructorTypeInference)));
+            compilation.VerifyDiagnostics(new[] {
+                // (7,17): warning CS8600: Converting null literal or possible null value to non-nullable type.
+                //         temp1 = null;
+                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "null").WithLocation(7, 17),
+                // (10,29): warning CS8619: Nullability of reference types in value of type 'P.C1<P.C1<int>?>' doesn't match target type 'P.C1<P.C1<int>>'.
+                //         C1<C1<int>> temp3 = temp2;
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "temp2").WithArguments("P.C1<P.C1<int>?>", "P.C1<P.C1<int>>").WithLocation(10, 29),
+                // (14,17): warning CS8600: Converting null literal or possible null value to non-nullable type.
+                //         temp4 = null;
+                Diagnostic(ErrorCode.WRN_ConvertingNullableToNonNullable, "null").WithLocation(14, 17),
+                // (16,40): warning CS8619: Nullability of reference types in value of type 'P.C2<P.C1<string?>, string?>' doesn't match target type 'P.C2<P.C1<string>, string>'.
+                //         C2<C1<string>, string> temp6 = temp5;
+                Diagnostic(ErrorCode.WRN_NullabilityMismatchInAssignment, "temp5").WithArguments("P.C2<P.C1<string?>, string?>", "P.C2<P.C1<string>, string>").WithLocation(16, 40)
+            });
+        }
 
         [Fact(Skip = "Not implemented yet")]
         public void PartialArrayCreationTypeInference_Simple() 
@@ -2378,5 +2492,7 @@ class P {
         [Fact(Skip = "Not implemented yet")]
         public void PartialArrayCreationTypeInference_Nullable() 
         { }
+
+        //multiple constructors
     }
 }

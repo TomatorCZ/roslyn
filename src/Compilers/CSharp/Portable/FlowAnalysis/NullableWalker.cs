@@ -3471,21 +3471,24 @@ namespace Microsoft.CodeAnalysis.CSharp
             return null;
         }
 
+        //TODO: 
+        // target type and delay
+
         private void VisitObjectCreationExpressionBase(BoundObjectCreationExpressionBase node)
         {
             Debug.Assert(!IsConditionalState);
-            bool isTargetTyped = node.WasTargetTyped;
+            bool isTargetTyped = node.WasTargetTyped && (node as BoundObjectCreationExpression)?.HasDiamondOperator != false;
             MethodSymbol? constructor = getConstructor(node, node.Type);
             var arguments = node.Arguments;
 
-            (_, ImmutableArray<VisitArgumentResult> argumentResults, _, ArgumentsCompletionDelegate? argumentsCompletion) =
+            (MethodSymbol s, ImmutableArray<VisitArgumentResult> argumentResults, _, ArgumentsCompletionDelegate? argumentsCompletion) =
                 VisitArguments(
                            node, arguments, node.ArgumentRefKindsOpt, constructor?.Parameters ?? default,
                            node.ArgsToParamsOpt, node.DefaultArguments, node.Expanded, invokedAsExtensionMethod: false,
                            constructor, delayCompletionForTargetMember: isTargetTyped);
             Debug.Assert(isTargetTyped == argumentsCompletion is not null);
 
-            var type = node.Type;
+            var type = s.ContainingType;
             (int slot, NullableFlowState resultState, Func<TypeSymbol, MethodSymbol?, int>? initialStateInferenceCompletion) = inferInitialObjectState(node, type, constructor, arguments, argumentResults, isTargetTyped);
 
             Action<int, TypeSymbol>? initializerCompletion = null;
@@ -3496,7 +3499,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             TypeWithState result = setAnalyzedNullability(node, type, argumentResults, argumentsCompletion, initialStateInferenceCompletion, initializerCompletion, resultState, isTargetTyped);
-            SetResultType(node, result, updateAnalyzedNullability: false);
+            bool change = !type.Equals(node.Type, TypeCompareKind.ConsiderEverything);
+            SetResultType(node, result, updateAnalyzedNullability: change);
+            if (change)
+                SetUpdatedSymbol(node, node.Constructor, s);
             return;
 
             TypeWithState setAnalyzedNullability(
@@ -4302,10 +4308,11 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private static bool IsTargetTypedExpression(BoundExpression node)
         {
-            return node is BoundConditionalOperator { WasTargetTyped: true } or
+            return node is (BoundConditionalOperator { WasTargetTyped: true } or
                            BoundConvertedSwitchExpression { WasTargetTyped: true } or
                            BoundObjectCreationExpressionBase { WasTargetTyped: true } or
-                           BoundDelegateCreationExpression { WasTargetTyped: true };
+                           BoundDelegateCreationExpression { WasTargetTyped: true })
+                           and not BoundObjectCreationExpression { HasDiamondOperator: false };
         }
 
         /// <summary>
@@ -6308,6 +6315,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                             method);
                     }
                 }
+                if (method?.IsConstructor() == true && (node is BoundObjectCreationExpression { HasDiamondOperator: true } creationExpr)) 
+                {
+                    method = InferConstructorTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded);
+                    parametersOpt = method.Parameters;
+                }
 
                 bool parameterHasNotNullIfNotNull = !IsAnalyzingAttribute && !parametersOpt.IsDefault && parametersOpt.Any(static p => !p.NotNullIfParameterNotNull.IsEmpty);
                 var notNullParametersBuilder = parameterHasNotNullIfNotNull ? ArrayBuilder<ParameterSymbol>.GetInstance() : null;
@@ -7096,6 +7108,57 @@ namespace Microsoft.CodeAnalysis.CSharp
             return (parameter, type, GetParameterAnnotations(parameter), isExpandedParamsArgument: false);
         }
 
+        private MethodSymbol InferConstructorTypeArguments(
+            MethodSymbol method,
+            ImmutableArray<BoundExpression> arguments,
+            ImmutableArray<RefKind> argumentRefKindsOpt,
+            ImmutableArray<int> argsToParamsOpt,
+            bool expanded
+        )
+        {
+            var definition = method.OriginalDefinition;
+            var refKinds = ArrayBuilder<RefKind>.GetInstance();
+            if (argumentRefKindsOpt != null)
+            {
+                refKinds.AddRange(argumentRefKindsOpt);
+            }
+
+            OverloadResolution.GetEffectiveParameterTypes(
+                definition,
+                arguments.Length,
+                argsToParamsOpt,
+                refKinds,
+                isMethodGroupConversion: false,
+                allowRefOmittedArguments: true,
+                binder: _binder,
+                expanded: expanded,
+                parameterTypes: out ImmutableArray<TypeWithAnnotations> parameterTypes,
+                parameterRefKinds: out ImmutableArray<RefKind> parameterRefKinds);
+            refKinds.Free();
+
+            var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
+            TypeInferenceResult result;
+
+            result = TypeInferrer.InferConstructor(
+                _binder,
+                _conversions,
+                definition.ContainingType.TypeParameters,
+                definition.ContainingType,
+                parameterTypes,
+                parameterRefKinds,
+                arguments,
+                ref discardedUseSiteInfo,
+                extensions: new InferenceExtensions(this),
+                useTypeParametersConstrains: true);
+
+            if (!result.Success)
+            {
+                return method;
+            }
+
+            return definition.ContainingType.Construct(result.InferredTypeArguments).Constructors.First(x => x.OriginalDefinition == definition);
+        }
+
         private MethodSymbol InferMethodTypeArguments(
             MethodSymbol method,
             ImmutableArray<BoundExpression> arguments,
@@ -7135,7 +7198,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
             TypeInferenceResult result;
 
-                result = TypeInferrer.InferMethod(
+            result = TypeInferrer.InferMethod(
                 _binder,
                 _conversions,
                 definition.TypeParameters,
@@ -7144,7 +7207,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 parameterRefKinds,
                 arguments,
                 ref discardedUseSiteInfo,
-                    extensions: new InferenceExtensions(this));
+                extensions: new InferenceExtensions(this));
             
 
             //var result = MethodTypeInferrer.Infer(
@@ -7201,6 +7264,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     case BoundKind.UnconvertedObjectCreationExpression:
                     case BoundKind.ConvertedTupleLiteral:
                         return NullableAnnotation.NotAnnotated;
+                    case BoundKind.TypeExpression:
+                        return ((BoundTypeExpression)expr).TypeWithAnnotations.NullableAnnotation;
                     default:
                         Debug.Assert(false); // unexpected value
                         return NullableAnnotation.Oblivious;

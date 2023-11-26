@@ -5923,7 +5923,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             TypeSymbol destinationType = default
             )
         {
+            var originalTypeArgs = type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics;
             bool inferred = type.IsInferred() || type.IsUnboundGenericType;
+            bool hasDiamond = type.IsUnboundGenericType;
             BoundExpression result = null;
             bool hasErrors = type.IsErrorType();
             if (type.IsAbstract)
@@ -6044,6 +6046,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     constantValueOpt,
                     boundInitializerOpt,
                     wasTargetTyped,
+                    originalTypeArgs,
+                    hasDiamond,
                     type,
                     hasError);
 

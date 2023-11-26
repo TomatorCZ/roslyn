@@ -349,7 +349,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             var arguments = AnalyzedArguments.GetInstance();
             node.Binder.BindArgumentsAndNames(node.ArgumentsOpt, node.Diagnostics, arguments, allowArglist: true);
             bool targetTyped = conversion.Kind == ConversionKind.TargetTypedInferredObjectCreation;
-            BoundExpression expr = node.Binder.BindClassCreationExpression(node.Syntax, node.TypeName, node.TypeSyntax, (NamedTypeSymbol)node.Type, arguments, diagnostics, node.InitializerOpt, node.InitializerTypeOpt, destinationType: targetTyped ? destination : default);
+            BoundExpression expr = node.Binder.BindClassCreationExpression(node.Syntax, node.TypeName, node.TypeSyntax, (NamedTypeSymbol)node.Type, arguments, diagnostics, node.InitializerOpt, node.InitializerTypeOpt, wasTargetTyped: targetTyped, destinationType: targetTyped ? destination : default);
             arguments.Free();
             Debug.Assert(expr is BoundObjectCreationExpressionBase { } or
                      BoundDelegateCreationExpression { } or
