@@ -7836,4 +7836,19 @@ To remove the warning, you can use /reference instead (set the Embed Interop Typ
   <data name="IDS_ImplicitIndexerInitializer" xml:space="preserve">
     <value>implicit indexer initializer</value>
   </data>
+  <data name="WRN_TypeHintsInDynamicCall" xml:space="preserve">
+    <value>Type hints will not be considered in type inference of dynamic call.</value>
+  </data>
+  <data name="WRN_UnderscoreNamedDisallowed" xml:space="preserve">
+    <value>Types and aliases should not be named '_'.</value>
+  </data>
+  <data name="WRN_TypeHintsInDynamicCall_Title" xml:space="preserve">
+    <value>Type hints will not be considered in type inference of dynamic call.</value>
+  </data>
+  <data name="WRN_UnderscoreNamedDisallowed_Title" xml:space="preserve">
+    <value>Types and aliases should not be named '_'.</value>
+  </data>
+  <data name="ERR_TypeHintsInDynamicObjectCreation" xml:space="preserve">
+    <value>Can't use inferred type arguments in object creation containing dynamic arguments.</value>
+  </data>
 </root>

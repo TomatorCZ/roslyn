@@ -53,6 +53,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case ObjectCreation:
                 case InlineArray:
                 case CollectionExpression:
+                case InferredClassCreation:
+                case InferredClassCreationWithTarget:
                     return true;
 
                 case ExplicitNumeric:

@@ -1804,6 +1804,7 @@
         Only kept in the tree if the call was an error and overload resolution
         was unable to choose a best method.-->
     <Field Name="OriginalMethodsOpt" Type="ImmutableArray&lt;MethodSymbol&gt;" Null="Allow" SkipInNullabilityRewriter="true"/>
+    <Field Name="OriginalTypeArgsOpt" Type="ImmutableArray&lt;TypeWithAnnotations&gt;" Null="Allow" SkipInNullabilityRewriter="true"/>
   </Node>
 
   <Node Name="BoundEventAssignmentOperator" Base="BoundExpression">
@@ -1845,6 +1846,17 @@
     <Field Name="Binder" Type="Binder" Null="disallow"/>
   </Node>
 
+  <Node Name="BoundUnconvertedInferredClassCreationExpression" Base="BoundExpression">
+    <Field Name="Type" Type="TypeSymbol?" Override="true" Null="always"/>
+    <Field Name="InferredType" Type="TypeSymbol" Null="disallow"/>
+    <Field Name="TypeName" Type="string" Null="disallow"/>
+    <Field Name="InitializerTypeOpt" Type="TypeSymbol?" Null="allow"/>
+    <Field Name="Binder" Type="Binder" Null="disallow"/>
+    <Field Name="Arguments" Type="AnalyzedArguments" Null="disallow"/>
+    <Field Name="BoundWithoutTargetTypeExpression" Type="BoundExpression" Null="disallow"/>
+    <Field Name="BoundWithoutTargetTypeDiagnostics" Type="BindingDiagnosticBag" Null="disallow"/>
+  </Node>
+
   <AbstractNode Name="BoundObjectCreationExpressionBase" Base="BoundExpression">
     <!-- Non-null type is required for this node kind -->
     <Field Name="Type" Type="TypeSymbol" Override="true" Null="disallow"/>
@@ -1870,6 +1882,7 @@
     <Field Name="ConstantValueOpt" Type="ConstantValue?" PropertyOverrides="true"/>
     <Field Name="InitializerExpressionOpt" Type="BoundObjectInitializerExpressionBase?" PropertyOverrides="true"/>
     <Field Name="WasTargetTyped" Type="bool" PropertyOverrides="true"/>
+    <Field Name="OriginalTypeArgsOpt" Type="ImmutableArray&lt;TypeWithAnnotations&gt;" Null="allow" SkipInNullabilityRewriter="true"/>
   </Node>
 
   <AbstractNode Name="BoundCollectionExpressionBase" Base="BoundExpression">

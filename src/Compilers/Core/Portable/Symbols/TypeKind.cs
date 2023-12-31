@@ -96,6 +96,8 @@ namespace Microsoft.CodeAnalysis
         /// </summary>
         internal const TypeKind FunctionType = (TypeKind)255;
 
+        internal const TypeKind InferredType = (TypeKind)254;
+
 #if DEBUG
         static TypeKindInternal()
         {

@@ -2284,6 +2284,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         #endregion
 
+        #region diagnostics introduced for Partial Type Inference
+        WRN_TypeHintsInDynamicCall = 9213,
+        WRN_UnderscoreNamedDisallowed = 9214,
+        ERR_TypeHintsInDynamicObjectCreation = 9215,
+        #endregion
+
         // Note: you will need to do the following after adding warnings:
         //  1) Re-generate compiler code (eng\generate-compiler-code.cmd).
     }

@@ -197,7 +197,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             var typeSymbol = this.Type;
 
-            if (typeSymbol.TypeKind != TypeKind.TypeParameter)
+            if (typeSymbol.TypeKind != TypeKind.TypeParameter && typeSymbol.TypeKind != TypeKindInternal.InferredType)
             {
                 if (!typeSymbol.IsValueType && !typeSymbol.IsErrorType())
                 {
@@ -207,6 +207,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 {
                     return makeNullableT();
                 }
+            }
+
+            if (typeSymbol.TypeKind == TypeKindInternal.InferredType)
+            {
+                return CreateNonLazyType(typeSymbol, NullableAnnotation.Annotated, this.CustomModifiers);
             }
 
             if (((TypeParameterSymbol)typeSymbol).TypeParameterKind == TypeParameterKind.Cref)
@@ -280,6 +285,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             _extensions.IsRefLikeType(DefaultType);
         public bool IsStatic =>
             _extensions.IsStatic(DefaultType);
+
+        public bool IsInferredType =>
+            _extensions.IsInferredType(DefaultType);
+
         public bool IsRestrictedType(bool ignoreSpanLikeTypes = false) =>
             _extensions.IsRestrictedType(DefaultType, ignoreSpanLikeTypes);
 
@@ -443,7 +452,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             TypeSymbol typeSymbol = this.Type;
             var newTypeWithModifiers = typeMap.SubstituteType(typeSymbol);
 
-            if (!typeSymbol.IsTypeParameter())
+            if (!typeSymbol.IsTypeParameter() && (typeSymbol.Kind != SymbolKindInternal.InferredType))
             {
                 Debug.Assert(newTypeWithModifiers.NullableAnnotation.IsOblivious() || (typeSymbol.IsNullableType() && newTypeWithModifiers.NullableAnnotation.IsAnnotated()));
                 Debug.Assert(newTypeWithModifiers.CustomModifiers.IsEmpty);
@@ -462,6 +471,21 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
                 return Create(newTypeWithModifiers.Type, NullableAnnotation, newCustomModifiers);
             }
+
+            if (typeSymbol.Kind == SymbolKindInternal.InferredType)
+            {
+                if (typeSymbol.Equals(newTypeWithModifiers.Type, TypeCompareKind.ConsiderEverything) && newCustomModifiers == CustomModifiers)
+                {
+                    return this; // substitution had no effect on the type or modifiers
+                }
+                else if (NullableAnnotation.IsNotAnnotated() && newCustomModifiers.IsEmpty)
+                {
+                    return newTypeWithModifiers;
+                }
+
+                return Create(newTypeWithModifiers.Type, NullableAnnotation, newCustomModifiers);
+            }
+
 
             if (newTypeWithModifiers.Is((TypeParameterSymbol)typeSymbol) &&
                 newCustomModifiers == CustomModifiers)
@@ -557,6 +581,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         /// Is this the given type parameter?
         /// </summary>
         public bool Is(TypeParameterSymbol other)
+        {
+            return DefaultNullableAnnotation.IsOblivious() && ((object)DefaultType == other) &&
+                   CustomModifiers.IsEmpty;
+        }
+
+        public bool Is(SourceInferredTypeSymbol other)
         {
             return DefaultNullableAnnotation.IsOblivious() && ((object)DefaultType == other) &&
                    CustomModifiers.IsEmpty;
@@ -862,6 +892,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal abstract SpecialType GetSpecialType(TypeSymbol typeSymbol);
             internal abstract bool IsRestrictedType(TypeSymbol typeSymbol, bool ignoreSpanLikeTypes);
             internal abstract bool IsStatic(TypeSymbol typeSymbol);
+            internal abstract bool IsInferredType(TypeSymbol typeSymbol);
             internal abstract bool IsVoid(TypeSymbol typeSymbol);
             internal abstract bool IsSZArray(TypeSymbol typeSymbol);
             internal abstract bool IsRefLikeType(TypeSymbol typeSymbol);
@@ -893,6 +924,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal override SpecialType GetSpecialType(TypeSymbol typeSymbol) => typeSymbol.SpecialType;
             internal override bool IsRestrictedType(TypeSymbol typeSymbol, bool ignoreSpanLikeTypes) => typeSymbol.IsRestrictedType(ignoreSpanLikeTypes);
             internal override bool IsStatic(TypeSymbol typeSymbol) => typeSymbol.IsStatic;
+            internal override bool IsInferredType(TypeSymbol typeSymbol) => typeSymbol.IsInferred();
             internal override bool IsVoid(TypeSymbol typeSymbol) => typeSymbol.IsVoidType();
             internal override bool IsSZArray(TypeSymbol typeSymbol) => typeSymbol.IsSZArray();
             internal override bool IsRefLikeType(TypeSymbol typeSymbol) => typeSymbol.IsRefLikeType;
@@ -965,6 +997,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal override SpecialType GetSpecialType(TypeSymbol typeSymbol) => typeSymbol.SpecialType;
             internal override bool IsRestrictedType(TypeSymbol typeSymbol, bool ignoreSpanLikeTypes) => typeSymbol.IsRestrictedType(ignoreSpanLikeTypes);
             internal override bool IsStatic(TypeSymbol typeSymbol) => typeSymbol.IsStatic;
+            internal override bool IsInferredType(TypeSymbol typeSymbol) => typeSymbol.TypeKind == TypeKindInternal.InferredType;
             internal override bool IsVoid(TypeSymbol typeSymbol) => typeSymbol.IsVoidType();
             internal override bool IsSZArray(TypeSymbol typeSymbol) => typeSymbol.IsSZArray();
             internal override bool IsRefLikeType(TypeSymbol typeSymbol) => typeSymbol.IsRefLikeType;
@@ -1069,6 +1102,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal override bool IsSZArray(TypeSymbol typeSymbol) => false;
             internal override bool IsRefLikeType(TypeSymbol typeSymbol) => false;
             internal override bool IsStatic(TypeSymbol typeSymbol) => false;
+            internal override bool IsInferredType(TypeSymbol typeSymbol) => false;
 
             private TypeSymbol GetResolvedType()
             {

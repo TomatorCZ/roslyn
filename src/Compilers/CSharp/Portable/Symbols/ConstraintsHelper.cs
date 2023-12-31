@@ -989,6 +989,11 @@ hasRelatedInterfaces:
                 return true;
             }
 
+            if (typeArgument.TypeKind == TypeKindInternal.InferredType)
+            {
+                return true;
+            }
+
             if (!CheckBasicConstraints(containingSymbol, in args, typeParameter, typeArgument, diagnosticsBuilder, nullabilityDiagnosticsBuilderOpt, ref useSiteDiagnosticsBuilder))
             {
                 return false;

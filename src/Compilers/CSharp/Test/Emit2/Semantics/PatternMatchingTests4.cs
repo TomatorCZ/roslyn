@@ -1508,12 +1508,15 @@ class _
             // Diagnostics are not ideal here.  On the other hand, this is not likely to be a frequent occurrence except in test code
             // so any effort at improving the diagnostics would not likely be well spent.
             compilation.VerifyDiagnostics(
-                // (9,20): error CS1003: Syntax error, ':' expected
+                // 0.cs(9,20): error CS1003: Syntax error, ':' expected
                 //             case _ x: break;
                 Diagnostic(ErrorCode.ERR_SyntaxError, "x").WithArguments(":").WithLocation(9, 20),
-                // (9,20): warning CS0164: This label has not been referenced
+                // 0.cs(9,20): warning CS0164: This label has not been referenced
                 //             case _ x: break;
-                Diagnostic(ErrorCode.WRN_UnreferencedLabel, "x").WithLocation(9, 20)
+                Diagnostic(ErrorCode.WRN_UnreferencedLabel, "x").WithLocation(9, 20),
+                // 0.cs(13,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(13, 7)
                 );
         }
 
@@ -1540,6 +1543,9 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
+                // 0.cs(16,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(16, 7)
                 );
             CompileAndVerify(compilation, expectedOutput: "3");
         }
@@ -1564,9 +1570,12 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
-                // (9,32): warning CS8513: The name '_' refers to the type '_', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
+                // 0.cs(9,32): warning CS8513: The name '_' refers to the type '_', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
                 //             Console.Write(e is _);
-                Diagnostic(ErrorCode.WRN_IsTypeNamedUnderscore, "_").WithArguments("_").WithLocation(9, 32)
+                Diagnostic(ErrorCode.WRN_IsTypeNamedUnderscore, "_").WithArguments("_").WithLocation(9, 32),
+                // 0.cs(13,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(13, 7)
                 );
             CompileAndVerify(compilation, expectedOutput: "FalseTrueFalse");
         }
@@ -1591,15 +1600,18 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
-                // (9,32): warning CS8513: The name '_' refers to the type '_', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
+                // 0.cs(9,32): warning CS8513: The name '_' refers to the type '_', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
                 //             Console.Write(e is _ x);
                 Diagnostic(ErrorCode.WRN_IsTypeNamedUnderscore, "_").WithArguments("_").WithLocation(9, 32),
-                // (9,34): error CS1003: Syntax error, ',' expected
+                // 0.cs(9,34): error CS1003: Syntax error, ',' expected
                 //             Console.Write(e is _ x);
                 Diagnostic(ErrorCode.ERR_SyntaxError, "x").WithArguments(",").WithLocation(9, 34),
-                // (9,34): error CS0103: The name 'x' does not exist in the current context
+                // 0.cs(9,34): error CS0103: The name 'x' does not exist in the current context
                 //             Console.Write(e is _ x);
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "x").WithArguments("x").WithLocation(9, 34)
+                Diagnostic(ErrorCode.ERR_NameNotInContext, "x").WithArguments("x").WithLocation(9, 34),
+                // 0.cs(13,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(13, 7)
                 );
         }
 
@@ -1623,6 +1635,9 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
+                // 0.cs(13,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(13, 7)
                 );
             CompileAndVerify(compilation, expectedOutput: "TrueTrueTrue");
         }
@@ -1650,6 +1665,9 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
+                // 0.cs(16,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(16, 7)
                 );
             CompileAndVerify(compilation, expectedOutput: "3");
         }
@@ -1678,9 +1696,12 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
-                // (6,19): warning CS0219: The variable '_' is assigned but its value is never used
+                // 0.cs(6,19): warning CS0219: The variable '_' is assigned but its value is never used
                 //         const int _ = 3;
-                Diagnostic(ErrorCode.WRN_UnreferencedVarAssg, "_").WithArguments("_").WithLocation(6, 19)
+                Diagnostic(ErrorCode.WRN_UnreferencedVarAssg, "_").WithArguments("_").WithLocation(6, 19),
+                // 0.cs(17,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(17, 7)
                 );
             CompileAndVerify(compilation, expectedOutput: "5");
         }
@@ -1709,18 +1730,21 @@ class _
 }";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
-                // (6,19): warning CS0219: The variable '_' is assigned but its value is never used
+                // 0.cs(6,19): warning CS0219: The variable '_' is assigned but its value is never used
                 //         const int _ = 3;
                 Diagnostic(ErrorCode.WRN_UnreferencedVarAssg, "_").WithArguments("_").WithLocation(6, 19),
-                // (10,22): error CS8502: Matching the tuple type '(object, object)' requires '2' subpatterns, but '3' subpatterns are present.
+                // 0.cs(10,22): error CS8502: Matching the tuple type '(object, object)' requires '2' subpatterns, but '3' subpatterns are present.
                 //             if (e is (_ x, _))
                 Diagnostic(ErrorCode.ERR_WrongNumberOfSubpatterns, "(_ x, _)").WithArguments("(object, object)", "2", "3").WithLocation(10, 22),
-                // (10,25): error CS1003: Syntax error, ',' expected
+                // 0.cs(10,25): error CS1003: Syntax error, ',' expected
                 //             if (e is (_ x, _))
                 Diagnostic(ErrorCode.ERR_SyntaxError, "x").WithArguments(",").WithLocation(10, 25),
-                // (10,25): error CS0103: The name 'x' does not exist in the current context
+                // 0.cs(10,25): error CS0103: The name 'x' does not exist in the current context
                 //             if (e is (_ x, _))
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "x").WithArguments("x").WithLocation(10, 25)
+                Diagnostic(ErrorCode.ERR_NameNotInContext, "x").WithArguments("x").WithLocation(10, 25),
+                // 0.cs(17,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(17, 7)
                 );
         }
 
@@ -1747,8 +1771,12 @@ class _
 {
 }";
             var compilation = CreatePatternCompilation(source);
-            compilation.VerifyDiagnostics(
-                );
+            compilation.VerifyDiagnostics(new[] {
+                    // 0.cs(17,7): warning CS9214: Types and aliases should not be named '_'.
+                    // class _
+                    Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(17, 7)
+                }
+            );
             CompileAndVerify(compilation, expectedOutput: "4");
         }
 
@@ -1775,7 +1803,11 @@ class _
 {
 }";
             var compilation = CreatePatternCompilation(source);
-            compilation.VerifyDiagnostics(
+            compilation.VerifyDiagnostics(new[] {
+                // 0.cs(17,7): warning CS9214: Types and aliases should not be named '_'.
+                // class _
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(17, 7)
+            }
                 );
             CompileAndVerify(compilation, expectedOutput: "8");
         }

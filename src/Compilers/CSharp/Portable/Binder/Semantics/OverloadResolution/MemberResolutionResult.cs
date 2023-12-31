@@ -16,23 +16,25 @@ namespace Microsoft.CodeAnalysis.CSharp
         private readonly TMember _member;
         private readonly TMember _leastOverriddenMember;
         private readonly MemberAnalysisResult _result;
+        private readonly TMember? _uninferredMember;
 
         /// <summary>
         /// At least one type argument was inferred from a function type.
         /// </summary>
         internal readonly bool HasTypeArgumentInferredFromFunctionType;
 
-        internal MemberResolutionResult(TMember member, TMember leastOverriddenMember, MemberAnalysisResult result, bool hasTypeArgumentInferredFromFunctionType)
+        internal MemberResolutionResult(TMember member, TMember leastOverriddenMember, MemberAnalysisResult result, bool hasTypeArgumentInferredFromFunctionType, TMember? uninferredMember = null)
         {
             _member = member;
             _leastOverriddenMember = leastOverriddenMember;
             _result = result;
             HasTypeArgumentInferredFromFunctionType = hasTypeArgumentInferredFromFunctionType;
+            _uninferredMember = uninferredMember;
         }
 
         internal MemberResolutionResult<TMember> WithResult(MemberAnalysisResult result)
         {
-            return new MemberResolutionResult<TMember>(Member, LeastOverriddenMember, result, HasTypeArgumentInferredFromFunctionType);
+            return new MemberResolutionResult<TMember>(Member, LeastOverriddenMember, result, HasTypeArgumentInferredFromFunctionType, UninferredMember);
         }
 
         internal bool IsNull
@@ -51,6 +53,11 @@ namespace Microsoft.CodeAnalysis.CSharp
         public TMember Member
         {
             get { return _member; }
+        }
+
+        public TMember UninferredMember
+        {
+            get { return _uninferredMember; }
         }
 
         /// <summary>

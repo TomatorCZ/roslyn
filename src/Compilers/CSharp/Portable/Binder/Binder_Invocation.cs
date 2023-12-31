@@ -26,11 +26,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             switch (node.Kind())
             {
                 case SyntaxKind.IdentifierName:
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics, allowInferredTypeArgs: false);
                 case SyntaxKind.GenericName:
-                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics);
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics, allowInferredTypeArgs: Compilation.LanguageVersion >= MessageID.IDS_FeaturePartialMethodTypeInference.RequiredVersion());
                 case SyntaxKind.SimpleMemberAccessExpression:
                 case SyntaxKind.PointerMemberAccessExpression:
-                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics);
+                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics, allowInferredTypeArgs: Compilation.LanguageVersion >= MessageID.IDS_FeaturePartialMethodTypeInference.RequiredVersion());
                 case SyntaxKind.ParenthesizedExpression:
                     return BindMethodGroup(((ParenthesizedExpressionSyntax)node).Expression, invoked: false, indexed: false, diagnostics: diagnostics);
                 default:
@@ -203,7 +204,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     var memberAccess = (MemberAccessExpressionSyntax)node.Expression;
                     analyzedArguments.Clear();
                     CheckContextForPointerTypes(nested, diagnostics, result); // BindExpression does this after calling BindExpressionInternal
-                    boundExpression = BindMemberAccessWithBoundLeft(memberAccess, result, memberAccess.Name, memberAccess.OperatorToken, invoked: true, indexed: false, diagnostics);
+                    boundExpression = BindMemberAccessWithBoundLeft(memberAccess, result, memberAccess.Name, memberAccess.OperatorToken, invoked: true, indexed: false, diagnostics, allowInferredTypeArgs: true);
                 }
 
                 invocations.Free();
@@ -367,6 +368,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                 BoundMethodGroup methodGroup = (BoundMethodGroup)expression;
                 BoundExpression receiver = methodGroup.ReceiverOpt;
 
+                if (!methodGroup.TypeArgumentsOpt.IsDefault && methodGroup.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+                {
+                    methodGroup = ConvertInferredTypeArgsToGenericVersion(methodGroup);
+                    Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, node);
+                }
+
                 // receiver is null if we are calling a static method declared on an outer class via its simple name:
                 if (receiver != null)
                 {
@@ -423,6 +430,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                             break;
                     }
                 }
+            }
+            else if (expression is BoundDynamicMemberAccess expr && !expr.TypeArgumentsOpt.IsDefault && expr.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+            {
+                Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, node);
+                expression = BindToNaturalType(ConvertInferredTypeArgsToGenericVersion(expr), diagnostics);
             }
             else
             {
@@ -596,6 +608,30 @@ namespace Microsoft.CodeAnalysis.CSharp
             overloadResolutionResult.Free();
             methodGroup.Free();
             return result;
+        }
+
+        private static BoundMethodGroup ConvertInferredTypeArgsToGenericVersion(BoundMethodGroup group)
+        {
+            if (!group.TypeArgumentsOpt.IsDefault && group.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+            {
+                return group.Update(default, group.Name, group.Methods, group.LookupSymbolOpt, group.LookupError, group.Flags, group.FunctionType, group.ReceiverOpt, group.ResultKind);
+            }
+            else
+            {
+                return group;
+            }
+        }
+
+        private static BoundDynamicMemberAccess ConvertInferredTypeArgsToGenericVersion(BoundDynamicMemberAccess dyn)
+        {
+            if (!dyn.TypeArgumentsOpt.IsDefault && dyn.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+            {
+                return dyn.Update(dyn.Receiver, default, dyn.Name, dyn.Invoked, dyn.Indexed, dyn.Type);
+            }
+            else
+            {
+                return dyn;
+            }
         }
 
         private static bool HasApplicableConditionalMethod(OverloadResolutionResult<MethodSymbol> results)
@@ -1039,6 +1075,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                             case BoundUnconvertedConditionalOperator { Type: { } naturalType } conditionalExpr:
                                 _ = ConvertConditionalExpression(conditionalExpr, naturalType, conversionIfTargetTyped: null, diagnostics);
                                 break;
+                            case BoundUnconvertedInferredClassCreationExpression { } expr:
+                                diagnostics.AddRange(expr.BoundWithoutTargetTypeDiagnostics);
+                                break;
                         }
                     }
                 }
@@ -1191,7 +1230,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             return new BoundCall(node, receiver, initialBindingReceiverIsSubjectToCloning: ReceiverIsSubjectToCloning(receiver, method), method, args, argNames, argRefKinds, isDelegateCall: isDelegateCall,
                         expanded: expanded, invokedAsExtensionMethod: invokedAsExtensionMethod,
-                        argsToParamsOpt: argsToParams, defaultArguments, resultKind: LookupResultKind.Viable, type: returnType, hasErrors: gotError);
+                        argsToParamsOpt: argsToParams, defaultArguments, resultKind: LookupResultKind.Viable, type: returnType, hasErrors: gotError, originalTypeArgsOpt: methodGroup.TypeArguments.ToImmutable());
         }
 
 #nullable enable

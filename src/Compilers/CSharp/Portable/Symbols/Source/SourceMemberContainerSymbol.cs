@@ -481,9 +481,13 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             return result;
         }
 
-        internal static bool IsReservedTypeName(string? name)
+        internal static bool IsReservedTypeName(string? name, CSharpCompilation compilation)
         {
-            return name is { Length: > 0 } && name.All(c => c >= 'a' && c <= 'z');
+            return name is { Length: > 0 } && (name.All(c => c >= 'a' && c <= 'z') || (
+                    name == "_"
+                    && (compilation.LanguageVersion >= MessageID.IDS_FeaturePartialConstructorTypeInference.RequiredVersion()
+                    || compilation.LanguageVersion >= MessageID.IDS_FeaturePartialMethodTypeInference.RequiredVersion())
+                ));
         }
 
         internal static void ReportReservedTypeName(string? name, CSharpCompilation compilation, DiagnosticBag? diagnostics, Location location)
@@ -493,14 +497,16 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 return;
             }
 
-            if (reportIfContextual(SyntaxKind.RecordKeyword, MessageID.IDS_FeatureRecords, ErrorCode.WRN_RecordNamedDisallowed)
+            if (reportIfContextual(SyntaxKind.UnderscoreToken, MessageID.IDS_FeaturePartialMethodTypeInference, ErrorCode.WRN_UnderscoreNamedDisallowed) 
+                || reportIfContextual(SyntaxKind.UnderscoreToken, MessageID.IDS_FeaturePartialConstructorTypeInference, ErrorCode.WRN_UnderscoreNamedDisallowed)
+                || reportIfContextual(SyntaxKind.RecordKeyword, MessageID.IDS_FeatureRecords, ErrorCode.WRN_RecordNamedDisallowed)
                 || reportIfContextual(SyntaxKind.RequiredKeyword, MessageID.IDS_FeatureRequiredMembers, ErrorCode.ERR_RequiredNameDisallowed)
                 || reportIfContextual(SyntaxKind.FileKeyword, MessageID.IDS_FeatureFileTypes, ErrorCode.ERR_FileTypeNameDisallowed)
                 || reportIfContextual(SyntaxKind.ScopedKeyword, MessageID.IDS_FeatureRefFields, ErrorCode.ERR_ScopedTypeNameDisallowed))
             {
                 return;
             }
-            else if (IsReservedTypeName(name))
+            else if (IsReservedTypeName(name, compilation))
             {
                 diagnostics.Add(ErrorCode.WRN_LowerCaseTypeName, location, name);
             }
@@ -1844,7 +1850,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 Binder.ReportMissingTupleElementNamesAttributesIfNeeded(compilation, location, diagnostics);
             }
 
-            if (IsReservedTypeName(Name))
+            if (IsReservedTypeName(Name, compilation))
             {
                 foreach (var syntaxRef in SyntaxReferences)
                 {

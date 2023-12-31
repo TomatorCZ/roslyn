@@ -183,6 +183,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         EventAssignmentOperator,
         Attribute,
         UnconvertedObjectCreationExpression,
+        UnconvertedInferredClassCreationExpression,
         ObjectCreationExpression,
         UnconvertedCollectionExpression,
         CollectionExpression,
@@ -6039,7 +6040,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
     internal sealed partial class BoundCall : BoundExpression
     {
-        public BoundCall(SyntaxNode syntax, BoundExpression? receiverOpt, ThreeState initialBindingReceiverIsSubjectToCloning, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, TypeSymbol type, bool hasErrors = false)
+        public BoundCall(SyntaxNode syntax, BoundExpression? receiverOpt, ThreeState initialBindingReceiverIsSubjectToCloning, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, ImmutableArray<TypeWithAnnotations> originalTypeArgsOpt, TypeSymbol type, bool hasErrors = false)
             : base(BoundKind.Call, syntax, type, hasErrors || receiverOpt.HasErrors() || arguments.HasErrors())
         {
 
@@ -6060,6 +6061,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             this.DefaultArguments = defaultArguments;
             this.ResultKind = resultKind;
             this.OriginalMethodsOpt = originalMethodsOpt;
+            this.OriginalTypeArgsOpt = originalTypeArgsOpt;
         }
 
         public new TypeSymbol Type => base.Type!;
@@ -6076,15 +6078,16 @@ namespace Microsoft.CodeAnalysis.CSharp
         public BitVector DefaultArguments { get; }
         public override LookupResultKind ResultKind { get; }
         public ImmutableArray<MethodSymbol> OriginalMethodsOpt { get; }
+        public ImmutableArray<TypeWithAnnotations> OriginalTypeArgsOpt { get; }
 
         [DebuggerStepThrough]
         public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitCall(this);
 
-        public BoundCall Update(BoundExpression? receiverOpt, ThreeState initialBindingReceiverIsSubjectToCloning, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, TypeSymbol type)
+        public BoundCall Update(BoundExpression? receiverOpt, ThreeState initialBindingReceiverIsSubjectToCloning, MethodSymbol method, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool isDelegateCall, bool expanded, bool invokedAsExtensionMethod, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, LookupResultKind resultKind, ImmutableArray<MethodSymbol> originalMethodsOpt, ImmutableArray<TypeWithAnnotations> originalTypeArgsOpt, TypeSymbol type)
         {
-            if (receiverOpt != this.ReceiverOpt || initialBindingReceiverIsSubjectToCloning != this.InitialBindingReceiverIsSubjectToCloning || !Symbols.SymbolEqualityComparer.ConsiderEverything.Equals(method, this.Method) || arguments != this.Arguments || argumentNamesOpt != this.ArgumentNamesOpt || argumentRefKindsOpt != this.ArgumentRefKindsOpt || isDelegateCall != this.IsDelegateCall || expanded != this.Expanded || invokedAsExtensionMethod != this.InvokedAsExtensionMethod || argsToParamsOpt != this.ArgsToParamsOpt || defaultArguments != this.DefaultArguments || resultKind != this.ResultKind || originalMethodsOpt != this.OriginalMethodsOpt || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
+            if (receiverOpt != this.ReceiverOpt || initialBindingReceiverIsSubjectToCloning != this.InitialBindingReceiverIsSubjectToCloning || !Symbols.SymbolEqualityComparer.ConsiderEverything.Equals(method, this.Method) || arguments != this.Arguments || argumentNamesOpt != this.ArgumentNamesOpt || argumentRefKindsOpt != this.ArgumentRefKindsOpt || isDelegateCall != this.IsDelegateCall || expanded != this.Expanded || invokedAsExtensionMethod != this.InvokedAsExtensionMethod || argsToParamsOpt != this.ArgsToParamsOpt || defaultArguments != this.DefaultArguments || resultKind != this.ResultKind || originalMethodsOpt != this.OriginalMethodsOpt || originalTypeArgsOpt != this.OriginalTypeArgsOpt || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
             {
-                var result = new BoundCall(this.Syntax, receiverOpt, initialBindingReceiverIsSubjectToCloning, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, originalMethodsOpt, type, this.HasErrors);
+                var result = new BoundCall(this.Syntax, receiverOpt, initialBindingReceiverIsSubjectToCloning, method, arguments, argumentNamesOpt, argumentRefKindsOpt, isDelegateCall, expanded, invokedAsExtensionMethod, argsToParamsOpt, defaultArguments, resultKind, originalMethodsOpt, originalTypeArgsOpt, type, this.HasErrors);
                 result.CopyAttributes(this);
                 return result;
             }
@@ -6214,6 +6217,52 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
     }
 
+    internal sealed partial class BoundUnconvertedInferredClassCreationExpression : BoundExpression
+    {
+        public BoundUnconvertedInferredClassCreationExpression(SyntaxNode syntax, TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments, BoundExpression boundWithoutTargetTypedExpression, BindingDiagnosticBag boundWithoutTargetTypedDiagnostics, bool hasErrors = false)
+            : base(BoundKind.UnconvertedInferredClassCreationExpression, syntax, null, hasErrors || boundWithoutTargetTypedExpression.HasErrors())
+        {
+
+            RoslynDebug.Assert(inferredType is object, "Field 'inferredType' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(typeName is object, "Field 'typeName' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(arguments is object, "Field 'arguments' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(boundWithoutTargetTypedExpression is object, "Field 'boundWithoutTargetTypedExpression' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(boundWithoutTargetTypedDiagnostics is object, "Field 'boundWithoutTargetTypedDiagnostics' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+
+            this.InferredType = inferredType;
+            this.TypeName = typeName;
+            this.InitializerTypeOpt = initializerTypeOpt;
+            this.Binder = binder;
+            this.Arguments = arguments;
+            this.BoundWithoutTargetTypeExpression = boundWithoutTargetTypedExpression;
+            this.BoundWithoutTargetTypeDiagnostics = boundWithoutTargetTypedDiagnostics;
+        }
+
+        public new TypeSymbol? Type => base.Type;
+        public TypeSymbol InferredType { get; }
+        public string TypeName { get; }
+        public TypeSymbol? InitializerTypeOpt { get; }
+        public Binder Binder { get; }
+        public AnalyzedArguments Arguments { get; }
+        public BoundExpression BoundWithoutTargetTypeExpression { get; }
+        public BindingDiagnosticBag BoundWithoutTargetTypeDiagnostics { get; }
+
+        [DebuggerStepThrough]
+        public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitUnconvertedInferredClassCreationExpression(this);
+
+        public BoundUnconvertedInferredClassCreationExpression Update(TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments, BoundExpression boundWithoutTargetTypedExpression, BindingDiagnosticBag boundWithoutTargetTypedDiagnostics)
+        {
+            if (!TypeSymbol.Equals(inferredType, this.InferredType, TypeCompareKind.ConsiderEverything) || typeName != this.TypeName || !TypeSymbol.Equals(initializerTypeOpt, this.InitializerTypeOpt, TypeCompareKind.ConsiderEverything) || binder != this.Binder || arguments != this.Arguments || boundWithoutTargetTypedExpression != this.BoundWithoutTargetTypeExpression || boundWithoutTargetTypedDiagnostics != this.BoundWithoutTargetTypeDiagnostics)
+            {
+                var result = new BoundUnconvertedInferredClassCreationExpression(this.Syntax, inferredType, typeName, initializerTypeOpt, binder, arguments, boundWithoutTargetTypedExpression, boundWithoutTargetTypedDiagnostics, this.HasErrors);
+                result.CopyAttributes(this);
+                return result;
+            }
+            return this;
+        }
+    }
+
     internal abstract partial class BoundObjectCreationExpressionBase : BoundExpression
     {
         protected BoundObjectCreationExpressionBase(BoundKind kind, SyntaxNode syntax, TypeSymbol type, bool hasErrors)
@@ -6237,7 +6286,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
     internal sealed partial class BoundObjectCreationExpression : BoundObjectCreationExpressionBase
     {
-        public BoundObjectCreationExpression(SyntaxNode syntax, MethodSymbol constructor, ImmutableArray<MethodSymbol> constructorsGroup, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool expanded, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, ConstantValue? constantValueOpt, BoundObjectInitializerExpressionBase? initializerExpressionOpt, bool wasTargetTyped, TypeSymbol type, bool hasErrors = false)
+        public BoundObjectCreationExpression(SyntaxNode syntax, MethodSymbol constructor, ImmutableArray<MethodSymbol> constructorsGroup, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool expanded, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, ConstantValue? constantValueOpt, BoundObjectInitializerExpressionBase? initializerExpressionOpt, bool wasTargetTyped, ImmutableArray<TypeWithAnnotations> originalTypeArgsOpt, TypeSymbol type, bool hasErrors = false)
             : base(BoundKind.ObjectCreationExpression, syntax, type, hasErrors || arguments.HasErrors() || initializerExpressionOpt.HasErrors())
         {
 
@@ -6257,6 +6306,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             this.ConstantValueOpt = constantValueOpt;
             this.InitializerExpressionOpt = initializerExpressionOpt;
             this.WasTargetTyped = wasTargetTyped;
+            this.OriginalTypeArgsOpt = originalTypeArgsOpt;
         }
 
         public override MethodSymbol Constructor { get; }
@@ -6270,15 +6320,16 @@ namespace Microsoft.CodeAnalysis.CSharp
         public override ConstantValue? ConstantValueOpt { get; }
         public override BoundObjectInitializerExpressionBase? InitializerExpressionOpt { get; }
         public override bool WasTargetTyped { get; }
+        public ImmutableArray<TypeWithAnnotations> OriginalTypeArgsOpt { get; }
 
         [DebuggerStepThrough]
         public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitObjectCreationExpression(this);
 
-        public BoundObjectCreationExpression Update(MethodSymbol constructor, ImmutableArray<MethodSymbol> constructorsGroup, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool expanded, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, ConstantValue? constantValueOpt, BoundObjectInitializerExpressionBase? initializerExpressionOpt, bool wasTargetTyped, TypeSymbol type)
+        public BoundObjectCreationExpression Update(MethodSymbol constructor, ImmutableArray<MethodSymbol> constructorsGroup, ImmutableArray<BoundExpression> arguments, ImmutableArray<string?> argumentNamesOpt, ImmutableArray<RefKind> argumentRefKindsOpt, bool expanded, ImmutableArray<int> argsToParamsOpt, BitVector defaultArguments, ConstantValue? constantValueOpt, BoundObjectInitializerExpressionBase? initializerExpressionOpt, bool wasTargetTyped, ImmutableArray<TypeWithAnnotations> originalTypeArgsOpt, TypeSymbol type)
         {
-            if (!Symbols.SymbolEqualityComparer.ConsiderEverything.Equals(constructor, this.Constructor) || constructorsGroup != this.ConstructorsGroup || arguments != this.Arguments || argumentNamesOpt != this.ArgumentNamesOpt || argumentRefKindsOpt != this.ArgumentRefKindsOpt || expanded != this.Expanded || argsToParamsOpt != this.ArgsToParamsOpt || defaultArguments != this.DefaultArguments || constantValueOpt != this.ConstantValueOpt || initializerExpressionOpt != this.InitializerExpressionOpt || wasTargetTyped != this.WasTargetTyped || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
+            if (!Symbols.SymbolEqualityComparer.ConsiderEverything.Equals(constructor, this.Constructor) || constructorsGroup != this.ConstructorsGroup || arguments != this.Arguments || argumentNamesOpt != this.ArgumentNamesOpt || argumentRefKindsOpt != this.ArgumentRefKindsOpt || expanded != this.Expanded || argsToParamsOpt != this.ArgsToParamsOpt || defaultArguments != this.DefaultArguments || constantValueOpt != this.ConstantValueOpt || initializerExpressionOpt != this.InitializerExpressionOpt || wasTargetTyped != this.WasTargetTyped || originalTypeArgsOpt != this.OriginalTypeArgsOpt || !TypeSymbol.Equals(type, this.Type, TypeCompareKind.ConsiderEverything))
             {
-                var result = new BoundObjectCreationExpression(this.Syntax, constructor, constructorsGroup, arguments, argumentNamesOpt, argumentRefKindsOpt, expanded, argsToParamsOpt, defaultArguments, constantValueOpt, initializerExpressionOpt, wasTargetTyped, type, this.HasErrors);
+                var result = new BoundObjectCreationExpression(this.Syntax, constructor, constructorsGroup, arguments, argumentNamesOpt, argumentRefKindsOpt, expanded, argsToParamsOpt, defaultArguments, constantValueOpt, initializerExpressionOpt, wasTargetTyped, originalTypeArgsOpt, type, this.HasErrors);
                 result.CopyAttributes(this);
                 return result;
             }
@@ -9043,6 +9094,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return VisitAttribute((BoundAttribute)node, arg);
                 case BoundKind.UnconvertedObjectCreationExpression:
                     return VisitUnconvertedObjectCreationExpression((BoundUnconvertedObjectCreationExpression)node, arg);
+                case BoundKind.UnconvertedInferredClassCreationExpression:
+                    return VisitUnconvertedInferredClassCreationExpression((BoundUnconvertedInferredClassCreationExpression)node, arg);
                 case BoundKind.ObjectCreationExpression:
                     return VisitObjectCreationExpression((BoundObjectCreationExpression)node, arg);
                 case BoundKind.UnconvertedCollectionExpression:
@@ -9346,6 +9399,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public virtual R VisitEventAssignmentOperator(BoundEventAssignmentOperator node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitAttribute(BoundAttribute node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitUnconvertedObjectCreationExpression(BoundUnconvertedObjectCreationExpression node, A arg) => this.DefaultVisit(node, arg);
+        public virtual R VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitObjectCreationExpression(BoundObjectCreationExpression node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitUnconvertedCollectionExpression(BoundUnconvertedCollectionExpression node, A arg) => this.DefaultVisit(node, arg);
         public virtual R VisitCollectionExpression(BoundCollectionExpression node, A arg) => this.DefaultVisit(node, arg);
@@ -9579,6 +9633,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public virtual BoundNode? VisitEventAssignmentOperator(BoundEventAssignmentOperator node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitAttribute(BoundAttribute node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitUnconvertedObjectCreationExpression(BoundUnconvertedObjectCreationExpression node) => this.DefaultVisit(node);
+        public virtual BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitUnconvertedCollectionExpression(BoundUnconvertedCollectionExpression node) => this.DefaultVisit(node);
         public virtual BoundNode? VisitCollectionExpression(BoundCollectionExpression node) => this.DefaultVisit(node);
@@ -10345,6 +10400,11 @@ namespace Microsoft.CodeAnalysis.CSharp
         public override BoundNode? VisitUnconvertedObjectCreationExpression(BoundUnconvertedObjectCreationExpression node)
         {
             this.VisitList(node.Arguments);
+            return null;
+        }
+        public override BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node)
+        {
+            this.Visit(node.BoundWithoutTargetTypeExpression);
             return null;
         }
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
@@ -11592,7 +11652,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression? receiverOpt = (BoundExpression?)this.Visit(node.ReceiverOpt);
             ImmutableArray<BoundExpression> arguments = this.VisitList(node.Arguments);
             TypeSymbol? type = this.VisitType(node.Type);
-            return node.Update(receiverOpt, node.InitialBindingReceiverIsSubjectToCloning, node.Method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, type);
+            return node.Update(receiverOpt, node.InitialBindingReceiverIsSubjectToCloning, node.Method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.OriginalTypeArgsOpt, type);
         }
         public override BoundNode? VisitEventAssignmentOperator(BoundEventAssignmentOperator node)
         {
@@ -11614,12 +11674,20 @@ namespace Microsoft.CodeAnalysis.CSharp
             TypeSymbol? type = this.VisitType(node.Type);
             return node.Update(arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.InitializerOpt, node.Binder);
         }
+        public override BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node)
+        {
+            BoundExpression boundWithoutTargetTypedExpression = (BoundExpression)this.Visit(node.BoundWithoutTargetTypeExpression);
+            TypeSymbol? inferredType = this.VisitType(node.InferredType);
+            TypeSymbol? initializerTypeOpt = this.VisitType(node.InitializerTypeOpt);
+            TypeSymbol? type = this.VisitType(node.Type);
+            return node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments, boundWithoutTargetTypedExpression, node.BoundWithoutTargetTypeDiagnostics);
+        }
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
             ImmutableArray<BoundExpression> arguments = this.VisitList(node.Arguments);
             BoundObjectInitializerExpressionBase? initializerExpressionOpt = (BoundObjectInitializerExpressionBase?)this.Visit(node.InitializerExpressionOpt);
             TypeSymbol? type = this.VisitType(node.Type);
-            return node.Update(node.Constructor, node.ConstructorsGroup, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.Expanded, node.ArgsToParamsOpt, node.DefaultArguments, node.ConstantValueOpt, initializerExpressionOpt, node.WasTargetTyped, type);
+            return node.Update(node.Constructor, node.ConstructorsGroup, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.Expanded, node.ArgsToParamsOpt, node.DefaultArguments, node.ConstantValueOpt, initializerExpressionOpt, node.WasTargetTyped, node.OriginalTypeArgsOpt, type);
         }
         public override BoundNode? VisitUnconvertedCollectionExpression(BoundUnconvertedCollectionExpression node)
         {
@@ -13754,12 +13822,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
             {
-                updatedNode = node.Update(receiverOpt, node.InitialBindingReceiverIsSubjectToCloning, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, infoAndType.Type!);
+                updatedNode = node.Update(receiverOpt, node.InitialBindingReceiverIsSubjectToCloning, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.OriginalTypeArgsOpt, infoAndType.Type!);
                 updatedNode.TopLevelNullability = infoAndType.Info;
             }
             else
             {
-                updatedNode = node.Update(receiverOpt, node.InitialBindingReceiverIsSubjectToCloning, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.Type);
+                updatedNode = node.Update(receiverOpt, node.InitialBindingReceiverIsSubjectToCloning, method, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.IsDelegateCall, node.Expanded, node.InvokedAsExtensionMethod, node.ArgsToParamsOpt, node.DefaultArguments, node.ResultKind, node.OriginalMethodsOpt, node.OriginalTypeArgsOpt, node.Type);
             }
             return updatedNode;
         }
@@ -13819,6 +13887,25 @@ namespace Microsoft.CodeAnalysis.CSharp
             return updatedNode;
         }
 
+        public override BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node)
+        {
+            TypeSymbol inferredType = GetUpdatedSymbol(node, node.InferredType);
+            TypeSymbol? initializerTypeOpt = GetUpdatedSymbol(node, node.InitializerTypeOpt);
+            BoundExpression boundWithoutTargetTypedExpression = (BoundExpression)this.Visit(node.BoundWithoutTargetTypeExpression);
+            BoundUnconvertedInferredClassCreationExpression updatedNode;
+
+            if (_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
+            {
+                updatedNode = node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments, boundWithoutTargetTypedExpression, node.BoundWithoutTargetTypeDiagnostics);
+                updatedNode.TopLevelNullability = infoAndType.Info;
+            }
+            else
+            {
+                updatedNode = node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments, boundWithoutTargetTypedExpression, node.BoundWithoutTargetTypeDiagnostics);
+            }
+            return updatedNode;
+        }
+
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
             MethodSymbol constructor = GetUpdatedSymbol(node, node.Constructor);
@@ -13829,12 +13916,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
             {
-                updatedNode = node.Update(constructor, constructorsGroup, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.Expanded, node.ArgsToParamsOpt, node.DefaultArguments, node.ConstantValueOpt, initializerExpressionOpt, node.WasTargetTyped, infoAndType.Type!);
+                updatedNode = node.Update(constructor, constructorsGroup, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.Expanded, node.ArgsToParamsOpt, node.DefaultArguments, node.ConstantValueOpt, initializerExpressionOpt, node.WasTargetTyped, node.OriginalTypeArgsOpt, infoAndType.Type!);
                 updatedNode.TopLevelNullability = infoAndType.Info;
             }
             else
             {
-                updatedNode = node.Update(constructor, constructorsGroup, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.Expanded, node.ArgsToParamsOpt, node.DefaultArguments, node.ConstantValueOpt, initializerExpressionOpt, node.WasTargetTyped, node.Type);
+                updatedNode = node.Update(constructor, constructorsGroup, arguments, node.ArgumentNamesOpt, node.ArgumentRefKindsOpt, node.Expanded, node.ArgsToParamsOpt, node.DefaultArguments, node.ConstantValueOpt, initializerExpressionOpt, node.WasTargetTyped, node.OriginalTypeArgsOpt, node.Type);
             }
             return updatedNode;
         }
@@ -16191,6 +16278,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             new TreeDumperNode("defaultArguments", node.DefaultArguments, null),
             new TreeDumperNode("resultKind", node.ResultKind, null),
             new TreeDumperNode("originalMethodsOpt", node.OriginalMethodsOpt, null),
+            new TreeDumperNode("originalTypeArgsOpt", node.OriginalTypeArgsOpt, null),
             new TreeDumperNode("type", node.Type, null),
             new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
             new TreeDumperNode("hasErrors", node.HasErrors, null)
@@ -16235,6 +16323,20 @@ namespace Microsoft.CodeAnalysis.CSharp
             new TreeDumperNode("hasErrors", node.HasErrors, null)
         }
         );
+        public override TreeDumperNode VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node, object? arg) => new TreeDumperNode("unconvertedInferredClassCreationExpression", null, new TreeDumperNode[]
+        {
+            new TreeDumperNode("inferredType", node.InferredType, null),
+            new TreeDumperNode("typeName", node.TypeName, null),
+            new TreeDumperNode("initializerTypeOpt", node.InitializerTypeOpt, null),
+            new TreeDumperNode("binder", node.Binder, null),
+            new TreeDumperNode("arguments", node.Arguments, null),
+            new TreeDumperNode("boundWithoutTargetTypedExpression", null, new TreeDumperNode[] { Visit(node.BoundWithoutTargetTypeExpression, null) }),
+            new TreeDumperNode("boundWithoutTargetTypedDiagnostics", node.BoundWithoutTargetTypeDiagnostics, null),
+            new TreeDumperNode("type", node.Type, null),
+            new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
+            new TreeDumperNode("hasErrors", node.HasErrors, null)
+        }
+        );
         public override TreeDumperNode VisitObjectCreationExpression(BoundObjectCreationExpression node, object? arg) => new TreeDumperNode("objectCreationExpression", null, new TreeDumperNode[]
         {
             new TreeDumperNode("constructor", node.Constructor, null),
@@ -16248,6 +16350,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             new TreeDumperNode("constantValueOpt", node.ConstantValueOpt, null),
             new TreeDumperNode("initializerExpressionOpt", null, new TreeDumperNode[] { Visit(node.InitializerExpressionOpt, null) }),
             new TreeDumperNode("wasTargetTyped", node.WasTargetTyped, null),
+            new TreeDumperNode("originalTypeArgsOpt", node.OriginalTypeArgsOpt, null),
             new TreeDumperNode("type", node.Type, null),
             new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
             new TreeDumperNode("hasErrors", node.HasErrors, null)

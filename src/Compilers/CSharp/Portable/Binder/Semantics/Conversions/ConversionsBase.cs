@@ -1115,6 +1115,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                         return collectionExpressionConversion;
                     }
                     break;
+                case BoundKind.UnconvertedInferredClassCreationExpression:
+                    return Conversion.InferredClassCreationWithTarget;
             }
 
             // Neither Span<T>, nor ReadOnlySpan<T> can be wrapped into a Nullable<T>, therefore, there is no point to check for an attempt to convert to Nullable types here. 

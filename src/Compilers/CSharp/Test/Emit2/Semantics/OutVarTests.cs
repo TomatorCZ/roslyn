@@ -33268,27 +33268,27 @@ public class C
 ";
             var comp = CreateCompilation(source, options: TestOptions.DebugDll);
             comp.VerifyDiagnostics(
-                // (6,9): error CS0103: The name '_' does not exist in the current context
-                //         _.ToString();
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "_").WithArguments("_").WithLocation(6, 9),
-                // (7,11): error CS0103: The name '_' does not exist in the current context
-                //         M(_);
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "_").WithArguments("_").WithLocation(7, 11),
-                // (8,9): error CS0103: The name '_' does not exist in the current context
-                //         _<T>.ToString();
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "_<T>").WithArguments("_").WithLocation(8, 9),
-                // (9,10): error CS0103: The name '_' does not exist in the current context
-                //         (_<T>, _<T>) = (1, 2);
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "_<T>").WithArguments("_").WithLocation(9, 10),
-                // (9,16): error CS0103: The name '_' does not exist in the current context
-                //         (_<T>, _<T>) = (1, 2);
-                Diagnostic(ErrorCode.ERR_NameNotInContext, "_<T>").WithArguments("_").WithLocation(9, 16),
-                // (10,11): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
-                //         M<_>();
-                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(10, 11),
-                // (11,19): error CS0117: 'C' does not contain a definition for '_'
-                //         new C() { _ = 1 };
-                Diagnostic(ErrorCode.ERR_NoSuchMember, "_").WithArguments("C", "_").WithLocation(11, 19)
+                    // (6,9): error CS0103: The name '_' does not exist in the current context
+                    //         _.ToString();
+                    Diagnostic(ErrorCode.ERR_NameNotInContext, "_").WithArguments("_").WithLocation(6, 9),
+                    // (7,11): error CS0103: The name '_' does not exist in the current context
+                    //         M(_);
+                    Diagnostic(ErrorCode.ERR_NameNotInContext, "_").WithArguments("_").WithLocation(7, 11),
+                    // (8,9): error CS0103: The name '_' does not exist in the current context
+                    //         _<T>.ToString();
+                    Diagnostic(ErrorCode.ERR_NameNotInContext, "_<T>").WithArguments("_").WithLocation(8, 9),
+                    // (9,10): error CS0103: The name '_' does not exist in the current context
+                    //         (_<T>, _<T>) = (1, 2);
+                    Diagnostic(ErrorCode.ERR_NameNotInContext, "_<T>").WithArguments("_").WithLocation(9, 10),
+                    // (9,16): error CS0103: The name '_' does not exist in the current context
+                    //         (_<T>, _<T>) = (1, 2);
+                    Diagnostic(ErrorCode.ERR_NameNotInContext, "_<T>").WithArguments("_").WithLocation(9, 16),
+                    // (10,9): error CS0411: The type arguments for method 'C.M<T>()' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                    //         M<_>();
+                    Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "M<_>").WithArguments("C.M<T>()").WithLocation(10, 9),
+                    // (11,19): error CS0117: 'C' does not contain a definition for '_'
+                    //         new C() { _ = 1 };
+                    Diagnostic(ErrorCode.ERR_NoSuchMember, "_").WithArguments("C", "_").WithLocation(11, 19)
                 );
         }
 

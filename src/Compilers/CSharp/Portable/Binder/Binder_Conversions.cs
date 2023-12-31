@@ -226,6 +226,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                     }
                 }
 
+                if (source.Kind == BoundKind.UnconvertedInferredClassCreationExpression)
+                {
+                    return ConvertInferredClassCreationExpression(syntax, (BoundUnconvertedInferredClassCreationExpression)source, conversion, isCast, destination, conversionGroupOpt, wasCompilerGenerated, diagnostics);
+                }
+
                 if (conversion.IsObjectCreation)
                 {
                     return ConvertObjectCreationExpression(syntax, (BoundUnconvertedObjectCreationExpression)source, conversion, isCast, destination, conversionGroupOpt, wasCompilerGenerated, diagnostics);
@@ -484,6 +489,44 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
         }
+
+        private BoundExpression ConvertInferredClassCreationExpression(
+            SyntaxNode syntax,
+            BoundUnconvertedInferredClassCreationExpression node,
+            Conversion conversion,
+            bool isCast,
+            TypeSymbol destination,
+            ConversionGroup? conversionGroupOpt,
+            bool wasCompilerGenerated,
+            BindingDiagnosticBag diagnostics
+            )
+        {
+            BoundExpression expr;
+            if (conversion.Kind == ConversionKind.InferredClassCreationWithTarget)
+            {
+                expr = node.Binder.BindClassCreationExpression(
+                    node.Syntax,
+                    node.TypeName,
+                    node.Syntax.Type,
+                    (NamedTypeSymbol)node.InferredType,
+                    node.Arguments,
+                    diagnostics,
+                    node.Syntax.Initializer,
+                    node.InitializerTypeOpt,
+                    wasTargetTyped: true,
+                    destinationType: destination);
+            }
+            else
+            {
+                expr = node.BoundWithoutTargetTypeExpression;
+                diagnostics.AddRangeAndFree(node.BoundWithoutTargetTypeDiagnostics);
+            }
+
+            node.Arguments.Free();
+
+            return GenerateConversionForAssignment(destination, expr, diagnostics);
+        }
+
 
         private static BoundExpression ConvertObjectCreationExpression(
             SyntaxNode syntax, BoundUnconvertedObjectCreationExpression node, Conversion conversion, bool isCast, TypeSymbol destination,

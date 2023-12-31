@@ -1183,21 +1183,42 @@ class Program1
     bool M4(object o) => o switch { 1 => true, _ => false };
 }
 ";
-            var expected = new[]
+            var expected1 = new[]
             {
-                // (5,31): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                // 0.cs(5,31): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
                 //     bool M1(object o) => o is _;
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(5, 31),
-                // (11,31): warning CS8513: The name '_' refers to the type 'Program1._', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
+                // 0.cs(10,11): warning CS9214: Types and aliases should not be named '_'.
+                //     class _ {}
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(10, 11),
+                // 0.cs(11,31): warning CS8513: The name '_' refers to the type 'Program1._', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
                 //     bool M3(object o) => o is _;
                 Diagnostic(ErrorCode.WRN_IsTypeNamedUnderscore, "_").WithArguments("Program1._").WithLocation(11, 31)
             };
 
             var compilation = CreatePatternCompilation(source);
-            compilation.VerifyDiagnostics(expected);
+            compilation.VerifyDiagnostics(
+                // 0.cs(5,31): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //     bool M1(object o) => o is _;
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(5, 31),
+                // 0.cs(10,11): warning CS9214: Types and aliases should not be named '_'.
+                //     class _ {}
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(10, 11),
+                // 0.cs(11,31): warning CS8513: The name '_' refers to the type 'Program1._', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
+                //     bool M3(object o) => o is _;
+                Diagnostic(ErrorCode.WRN_IsTypeNamedUnderscore, "_").WithArguments("Program1._").WithLocation(11, 31)
+            );
+
 
             compilation = CreateCompilation(source, parseOptions: TestOptions.Regular8);
-            compilation.VerifyDiagnostics(expected);
+            compilation.VerifyDiagnostics(
+                // 0.cs(5,31): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //     bool M1(object o) => o is _;
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(5, 31),
+                // 0.cs(11,31): warning CS8513: The name '_' refers to the type 'Program1._', not the discard pattern. Use '@_' for the type, or 'var _' to discard.
+                //     bool M3(object o) => o is _;
+                Diagnostic(ErrorCode.WRN_IsTypeNamedUnderscore, "_").WithArguments("Program1._").WithLocation(11, 31)
+            );
 
             compilation = CreateCompilation(source, parseOptions: TestOptions.Regular7_3);
             compilation.VerifyDiagnostics(
@@ -1274,9 +1295,12 @@ class Program
 ";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
-                // (1,1): hidden CS8019: Unnecessary using directive.
+                // 0.cs(1,1): hidden CS8019: Unnecessary using directive.
                 // using _ = System.Int32;
-                Diagnostic(ErrorCode.HDN_UnusedUsingDirective, "using _ = System.Int32;").WithLocation(1, 1)
+                Diagnostic(ErrorCode.HDN_UnusedUsingDirective, "using _ = System.Int32;").WithLocation(1, 1),
+                // 0.cs(1,7): warning CS9214: Types and aliases should not be named '_'.
+                // using _ = System.Int32;
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(1, 7)
                 );
         }
 
@@ -1299,6 +1323,9 @@ class Program1
 ";
             var compilation = CreatePatternCompilation(source);
             compilation.VerifyDiagnostics(
+                // 0.cs(10,11): warning CS9214: Types and aliases should not be named '_'.
+                //     class _ {}
+                Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(10, 11)
                 );
         }
 

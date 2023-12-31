@@ -287,6 +287,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression result;
             switch (expression)
             {
+                case BoundUnconvertedInferredClassCreationExpression expr:
+                    result = expr.BoundWithoutTargetTypeExpression;
+                    diagnostics.AddRangeAndFree(expr.BoundWithoutTargetTypeDiagnostics);
+                    expr.Arguments.Free();
+                    break;
                 case BoundUnconvertedSwitchExpression expr:
                     {
                         var commonType = expr.Type;
@@ -1490,7 +1495,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             SimpleNameSyntax node,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredTypeArgs = false)
         {
             Debug.Assert(node != null);
 
@@ -1533,7 +1539,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             Debug.Assert(node.Arity == typeArgumentList.Count);
 
             var typeArgumentsWithAnnotations = hasTypeArguments ?
-                BindTypeArguments(typeArgumentList, diagnostics) :
+                BindTypeArguments(typeArgumentList, diagnostics, allowInferredTypes: allowInferredTypeArgs) :
                 default(ImmutableArray<TypeWithAnnotations>);
 
             var lookupResult = LookupResult.GetInstance();
@@ -3807,7 +3813,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                     BoundExpression boundExpression = boundInitExpr[boundInitExprIndex];
                     boundInitExprIndex++;
 
-                    BoundExpression convertedExpression = GenerateConversionForAssignment(elemType, boundExpression, diagnostics);
+                    BoundExpression convertedExpression;
+                    if (boundExpression.Kind == BoundKind.UnconvertedInferredClassCreationExpression && isInferred)
+                        convertedExpression = CreateConversion(boundExpression.Syntax, boundExpression, Conversion.InferredClassCreation, false, null, elemType, diagnostics);
+                    else
+                        convertedExpression = GenerateConversionForAssignment(elemType, boundExpression, diagnostics);
+
                     initializers.Add(convertedExpression);
                 }
             }
@@ -4682,9 +4693,29 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             BoundExpression bindObjectCreationExpression(ObjectCreationExpressionSyntax node, BindingDiagnosticBag diagnostics)
             {
-                var typeWithAnnotations = BindType(node.Type, diagnostics);
+                var tempDiagnostics = BindingDiagnosticBag.GetInstance(diagnostics.AccumulatesDiagnostics, diagnostics.AccumulatesDependencies);
+                var typeWithAnnotations = BindType(node.Type, tempDiagnostics, allowInferredType: Compilation.LanguageVersion >= MessageID.IDS_FeaturePartialConstructorTypeInference.RequiredVersion());
                 var type = typeWithAnnotations.Type;
                 var originalType = type;
+
+                if (type.IsInferred())
+                {
+                    if (type.TypeKind != TypeKindInternal.InferredType && type.TypeKind is TypeKind.Struct or TypeKind.Class or TypeKind.Enum or TypeKind.Error)
+                    {
+                        diagnostics.AddRangeAndFree(tempDiagnostics);
+                    }
+                    else
+                    {
+                        tempDiagnostics.Clear();
+                        typeWithAnnotations = BindType(node.Type, diagnostics);
+                        type = typeWithAnnotations.Type;
+                        originalType = type;
+                    }
+                }
+                else 
+                {
+                    diagnostics.AddRangeAndFree(tempDiagnostics);
+                }
 
                 if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
                 {
@@ -5011,12 +5042,25 @@ namespace Microsoft.CodeAnalysis.CSharp
                     diagnostics.Add(ErrorCode.ERR_NewWithTupleTypeSyntax, node.Type.GetLocation());
                     return MakeBadExpressionForObjectCreation(node, type, analyzedArguments, diagnostics);
                 }
-
-                return BindClassCreationExpression(node, typeName, node.Type, type, analyzedArguments, diagnostics, node.Initializer, initializerType);
+                else
+                {
+                    var tempDiagnostics = BindingDiagnosticBag.GetInstance(diagnostics.AccumulatesDiagnostics, diagnostics.AccumulatesDependencies);
+                    var boundWithoutTarget = BindClassCreationExpression(node, typeName, node.Type, type, analyzedArguments, tempDiagnostics, node.Initializer, initializerType);
+                    if (type.IsInferred())
+                    {
+                        return new BoundUnconvertedInferredClassCreationExpression(node, type, typeName, initializerType, this, analyzedArguments, boundWithoutTarget, tempDiagnostics);
+                    }
+                    else
+                    {
+                        diagnostics.AddRangeAndFree(tempDiagnostics);
+                        return boundWithoutTarget;
+                    }
+                }
             }
             finally
             {
-                analyzedArguments.Free();
+                if (!type.IsInferred())
+                    analyzedArguments.Free();
             }
         }
 
@@ -6075,8 +6119,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             InitializerExpressionSyntax initializerSyntaxOpt = null,
             TypeSymbol initializerTypeOpt = null,
-            bool wasTargetTyped = false)
+            bool wasTargetTyped = false,
+            TypeSymbol destinationType = default)
         {
+            var originalTypeArgs = type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics;
             BoundExpression result = null;
             bool hasErrors = type.IsErrorType();
             if (type.IsAbstract)
@@ -6096,6 +6142,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (analyzedArguments.HasDynamicArgument)
             {
+                if (type.IsInferred())
+                {
+                    type = type.OriginalDefinition;
+                    hasErrors = true;
+                    Error(diagnostics, ErrorCode.ERR_TypeHintsInDynamicObjectCreation, node);
+                }
                 OverloadResolutionResult<MethodSymbol> overloadResolutionResult = OverloadResolutionResult<MethodSymbol>.GetInstance();
                 this.OverloadResolution.ObjectCreationOverloadResolution(GetAccessibleConstructorsForOverloadResolution(type, ref useSiteInfo), analyzedArguments, overloadResolutionResult, ref useSiteInfo);
                 diagnostics.Add(node, useSiteInfo);
@@ -6139,10 +6191,13 @@ namespace Microsoft.CodeAnalysis.CSharp
                     out MemberResolutionResult<MethodSymbol> memberResolutionResult,
                     out ImmutableArray<MethodSymbol> candidateConstructors,
                     allowProtectedConstructorsOfBaseType: false,
-                    suppressUnsupportedRequiredMembersError: false) &&
+                    suppressUnsupportedRequiredMembersError: false,
+                    destinationType: destinationType) &&
                 !type.IsAbstract)
             {
                 var method = memberResolutionResult.Member;
+                if (!type.IsErrorType())
+                    type = method.ContainingType;
 
                 bool hasError = false;
 
@@ -6185,12 +6240,24 @@ namespace Microsoft.CodeAnalysis.CSharp
                     constantValueOpt,
                     boundInitializerOpt,
                     wasTargetTyped,
+                    originalTypeArgs,
                     type,
                     hasError);
 
                 CheckRequiredMembersInObjectInitializer(creation.Constructor, creation.InitializerExpressionOpt?.Initializers ?? default, creation.Syntax, diagnostics);
 
                 return creation;
+            }
+
+            if (type.IsInferred())
+            {
+                type = CreateErrorType(typeName);
+                initializerTypeOpt = null;
+            }
+
+            if (!TypeSymbol.Equals(initializerTypeOpt, null) && initializerTypeOpt.IsInferred())
+            {
+                initializerTypeOpt = type;
             }
 
             LookupResultKind resultKind;
@@ -6465,7 +6532,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             out MemberResolutionResult<MethodSymbol> memberResolutionResult,
             out ImmutableArray<MethodSymbol> candidateConstructors,
             bool allowProtectedConstructorsOfBaseType,
-            bool suppressUnsupportedRequiredMembersError) // Last to make named arguments more convenient.
+            bool suppressUnsupportedRequiredMembersError,
+            TypeSymbol destinationType = default) // Last to make named arguments more convenient.
         {
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
@@ -6483,7 +6551,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (candidateConstructors.Any())
             {
                 // We have at least one accessible candidate constructor, perform overload resolution with accessible candidateConstructors.
-                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo);
+                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo, destinationType);
 
                 if (result.Succeeded)
                 {
@@ -6498,7 +6566,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // We might have a best match constructor which is inaccessible.
                 // Try overload resolution with all instance constructors to generate correct diagnostics and semantic info for this case.
                 OverloadResolutionResult<MethodSymbol> inaccessibleResult = OverloadResolutionResult<MethodSymbol>.GetInstance();
-                this.OverloadResolution.ObjectCreationOverloadResolution(allInstanceConstructors, analyzedArguments, inaccessibleResult, ref useSiteInfo);
+                this.OverloadResolution.ObjectCreationOverloadResolution(allInstanceConstructors, analyzedArguments, inaccessibleResult, ref useSiteInfo, destinationType);
 
                 if (inaccessibleResult.Succeeded)
                 {
@@ -6565,6 +6633,14 @@ namespace Microsoft.CodeAnalysis.CSharp
                         memberGroup: candidateConstructors, typeContainingConstructors, delegateTypeBeingInvoked: null);
                 }
             }
+
+            var resolutedCtors = result.Results.Where(x => x.UninferredMember != null).ToDictionary(x => x.UninferredMember);
+            candidateConstructors = candidateConstructors.Select(x => {
+                if (resolutedCtors.ContainsKey(x))
+                    return resolutedCtors[x].Member;
+                else
+                    return x;
+            }).ToImmutableArray();
 
             result.Free();
             return succeededConsideringAccessibility;
@@ -6741,7 +6817,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             MemberAccessExpressionSyntax node,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredTypeArgs = false)
         {
             Debug.Assert(node != null);
             Debug.Assert(invoked == SyntaxFacts.IsInvoked(node));
@@ -6782,7 +6859,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
 
-            return BindMemberAccessWithBoundLeft(node, boundLeft, node.Name, node.OperatorToken, invoked, indexed, diagnostics);
+            return BindMemberAccessWithBoundLeft(node, boundLeft, node.Name, node.OperatorToken, invoked, indexed, diagnostics, allowInferredTypeArgs);
         }
 
         /// <summary>
@@ -6906,7 +6983,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             SimpleNameSyntax right,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredTypeArgs = false)
         {
             // We have an expression of the form "dynExpr.Name" or "dynExpr.Name<X>"
 
@@ -6915,7 +6993,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 default(SeparatedSyntaxList<TypeSyntax>);
             bool rightHasTypeArguments = typeArgumentsSyntax.Count > 0;
             ImmutableArray<TypeWithAnnotations> typeArgumentsWithAnnotations = rightHasTypeArguments ?
-                BindTypeArguments(typeArgumentsSyntax, diagnostics) :
+                BindTypeArguments(typeArgumentsSyntax, diagnostics, allowInferredTypes: allowInferredTypeArgs) :
                 default(ImmutableArray<TypeWithAnnotations>);
 
             bool hasErrors = false;
@@ -6932,7 +7010,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 for (int i = 0; i < typeArgumentsWithAnnotations.Length; ++i)
                 {
                     var typeArgument = typeArgumentsWithAnnotations[i];
-                    if (typeArgument.Type.IsPointerOrFunctionPointer() || typeArgument.Type.IsRestrictedType())
+                    if (!typeArgument.Type.IsInferred() && (typeArgument.Type.IsPointerOrFunctionPointer() || typeArgument.Type.IsRestrictedType()))
                     {
                         // "The type '{0}' may not be used as a type argument"
                         Error(diagnostics, ErrorCode.ERR_BadTypeArgument, typeArgumentsSyntax[i], typeArgument.Type);
@@ -6978,7 +7056,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             SyntaxToken operatorToken,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredTypeArgs = false)
         {
             Debug.Assert(node != null);
             Debug.Assert(boundLeft != null);
@@ -6995,7 +7074,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // If Goo itself is a dynamic thing (e.g. in `x.Goo.Bar`, `x` is dynamic, and we're
                 // currently checking Bar), then CheckValue will do nothing.
                 boundLeft = CheckValue(boundLeft, BindValueKind.RValue, diagnostics);
-                return BindDynamicMemberAccess(node, boundLeft, right, invoked, indexed, diagnostics);
+                return BindDynamicMemberAccess(node, boundLeft, right, invoked, indexed, diagnostics, allowInferredTypeArgs: allowInferredTypeArgs);
             }
 
             // No member accesses on void
@@ -7034,7 +7113,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
 
                 var typeArgumentsSyntax = right.Kind() == SyntaxKind.GenericName ? ((GenericNameSyntax)right).TypeArgumentList.Arguments : default(SeparatedSyntaxList<TypeSyntax>);
-                var typeArguments = typeArgumentsSyntax.Count > 0 ? BindTypeArguments(typeArgumentsSyntax, diagnostics) : default(ImmutableArray<TypeWithAnnotations>);
+                var typeArguments = typeArgumentsSyntax.Count > 0 ? BindTypeArguments(typeArgumentsSyntax, diagnostics, allowInferredTypes: allowInferredTypeArgs) : default(ImmutableArray<TypeWithAnnotations>);
 
                 // A member-access consists of a primary-expression, a predefined-type, or a 
                 // qualified-alias-member, followed by a "." token, followed by an identifier, 

@@ -279,6 +279,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         IDS_StringEscapeCharacter = MessageBase + 12839,
 
         IDS_ImplicitIndexerInitializer = MessageBase + 12840,
+
+        IDS_FeaturePartialMethodTypeInference = MessageBase + 12841,
+        IDS_FeaturePartialConstructorTypeInference = MessageBase + 12842,
     }
 
     // Message IDs may refer to strings that need to be localized.
@@ -461,6 +464,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // C# preview features.
                 case MessageID.IDS_StringEscapeCharacter:
                 case MessageID.IDS_ImplicitIndexerInitializer:
+                case MessageID.IDS_FeaturePartialMethodTypeInference:
+                case MessageID.IDS_FeaturePartialConstructorTypeInference:
                     return LanguageVersion.Preview;
 
                 // C# 12.0 features.

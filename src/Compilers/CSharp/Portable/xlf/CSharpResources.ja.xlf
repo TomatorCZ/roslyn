@@ -1977,6 +1977,11 @@
         <target state="translated">'class'、'struct'、'unmanaged'、'notnull'、'default' の制約を組み合わせたり、複製したりすることはできません。これらは制約リストの最初に指定する必要があります。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments.</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">'{0}' は、補間された文字列ハンドラー型ではありません。</target>
@@ -4873,6 +4878,16 @@
         <target state="translated">タプル要素名は、タプルの == または != 演算子の反対側に異なる名前が指定されたか名前が指定されていないため、無視されます。</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall_Title">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">型パラメーター '{0}' は、外のメソッドからの型パラメーター '{1}' と同じ名前です</target>
@@ -4951,6 +4966,16 @@
       <trans-unit id="WRN_UndecoratedCancellationTokenParameter_Title">
         <source>Async-iterator member has one or more parameters of type 'CancellationToken' but none of them is decorated with the 'EnumeratorCancellation' attribute, so the cancellation token parameter from the generated 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' will be unconsumed</source>
         <target state="translated">非同期反復子メンバーには型 'CancellationToken' の 1 つ以上のパラメーターがありますが、'EnumeratorCancellation' 属性で修飾されているパラメーターはありません。そのため、生成された 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' からの取り消しトークン パラメーターは使用されません</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed_Title">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_UninitializedNonNullableField">

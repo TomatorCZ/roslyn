@@ -299,9 +299,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         // Binds the given expression syntax as Type.
         // If the resulting symbol is an Alias to a Type, it unwraps the alias
         // and returns it's target type.
-        internal TypeWithAnnotations BindType(ExpressionSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null, bool suppressUseSiteDiagnostics = false)
+        internal TypeWithAnnotations BindType(ExpressionSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null, bool suppressUseSiteDiagnostics = false, bool allowInferredType = false)
         {
-            var symbol = BindTypeOrAlias(syntax, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics);
+            var symbol = BindTypeOrAlias(syntax, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, allowInferredType);
             return UnwrapAlias(symbol, diagnostics, syntax, basesBeingResolved).TypeWithAnnotations;
         }
 
@@ -317,11 +317,11 @@ namespace Microsoft.CodeAnalysis.CSharp
         // Binds the given expression syntax as Type or an Alias to Type
         // and returns the resultant symbol.
         // NOTE: This method doesn't unwrap aliases.
-        internal NamespaceOrTypeOrAliasSymbolWithAnnotations BindTypeOrAlias(ExpressionSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null, bool suppressUseSiteDiagnostics = false)
+        internal NamespaceOrTypeOrAliasSymbolWithAnnotations BindTypeOrAlias(ExpressionSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null, bool suppressUseSiteDiagnostics = false, bool allowInferredType = false)
         {
             Debug.Assert(diagnostics != null);
 
-            var symbol = BindNamespaceOrTypeOrAliasSymbol(syntax, diagnostics, basesBeingResolved, basesBeingResolved != null || suppressUseSiteDiagnostics);
+            var symbol = BindNamespaceOrTypeOrAliasSymbol(syntax, diagnostics, basesBeingResolved, basesBeingResolved != null || suppressUseSiteDiagnostics, allowInferredType);
 
             // symbol must be a TypeSymbol or an Alias to a TypeSymbol
             if (symbol.IsType ||
@@ -405,7 +405,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// enough they should be disqualified from inlining. In the future when attributes are allowed on
         /// local functions we should explicitly mark them as <see cref="MethodImplOptions.NoInlining"/>
         /// </remarks>
-        internal NamespaceOrTypeOrAliasSymbolWithAnnotations BindNamespaceOrTypeOrAliasSymbol(ExpressionSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved, bool suppressUseSiteDiagnostics)
+        internal NamespaceOrTypeOrAliasSymbolWithAnnotations BindNamespaceOrTypeOrAliasSymbol(ExpressionSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved, bool suppressUseSiteDiagnostics, bool allowInferredType = false)
         {
             switch (syntax.Kind())
             {
@@ -416,10 +416,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return bindPredefined();
 
                 case SyntaxKind.IdentifierName:
-                    return BindNonGenericSimpleNamespaceOrTypeOrAliasSymbol((IdentifierNameSyntax)syntax, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, qualifierOpt: null);
+                    return BindNonGenericSimpleNamespaceOrTypeOrAliasSymbol((IdentifierNameSyntax)syntax, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, qualifierOpt: null, allowInferredType: allowInferredType);
 
                 case SyntaxKind.GenericName:
-                    return BindGenericSimpleNamespaceOrTypeOrAliasSymbol((GenericNameSyntax)syntax, diagnostics, basesBeingResolved, qualifierOpt: null);
+                    return BindGenericSimpleNamespaceOrTypeOrAliasSymbol((GenericNameSyntax)syntax, diagnostics, basesBeingResolved, qualifierOpt: null, allowInferredTypeArgs: allowInferredType);
 
                 case SyntaxKind.AliasQualifiedName:
                     return bindAlias();
@@ -427,18 +427,18 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case SyntaxKind.QualifiedName:
                     {
                         var node = (QualifiedNameSyntax)syntax;
-                        return BindQualifiedName(node.Left, node.Right, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics);
+                        return BindQualifiedName(node.Left, node.Right, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, allowInferredTypeArgs: allowInferredType);
                     }
 
                 case SyntaxKind.SimpleMemberAccessExpression:
                     {
                         var node = (MemberAccessExpressionSyntax)syntax;
-                        return BindQualifiedName(node.Expression, node.Name, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics);
+                        return BindQualifiedName(node.Expression, node.Name, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, allowInferredTypeArgs: allowInferredType);
                     }
 
                 case SyntaxKind.ArrayType:
                     {
-                        return BindArrayType((ArrayTypeSyntax)syntax, diagnostics, permitDimensions: false, basesBeingResolved, disallowRestrictedTypes: true);
+                        return BindArrayType((ArrayTypeSyntax)syntax, diagnostics, permitDimensions: false, basesBeingResolved, disallowRestrictedTypes: true, allowInferredElementType: allowInferredType);
                     }
 
                 case SyntaxKind.PointerType:
@@ -472,7 +472,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case SyntaxKind.TupleType:
                     {
                         var tupleTypeSyntax = (TupleTypeSyntax)syntax;
-                        return TypeWithAnnotations.Create(AreNullableAnnotationsEnabled(tupleTypeSyntax.CloseParenToken), BindTupleType(tupleTypeSyntax, diagnostics, basesBeingResolved));
+                        return TypeWithAnnotations.Create(AreNullableAnnotationsEnabled(tupleTypeSyntax.CloseParenToken), BindTupleType(tupleTypeSyntax, diagnostics, basesBeingResolved, allowInferredTypeArgs: allowInferredType));
                     }
 
                 case SyntaxKind.RefType:
@@ -540,7 +540,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 MessageID.IDS_FeatureNullable.CheckFeatureAvailability(diagnostics, nullableSyntax.QuestionToken);
 
                 TypeSyntax typeArgumentSyntax = nullableSyntax.ElementType;
-                TypeWithAnnotations typeArgument = BindType(typeArgumentSyntax, diagnostics, basesBeingResolved);
+                TypeWithAnnotations typeArgument = BindType(typeArgumentSyntax, diagnostics, basesBeingResolved, allowInferredType: allowInferredType);
                 TypeWithAnnotations constructedType = typeArgument.SetIsAnnotated(Compilation);
 
                 reportNullableReferenceTypesIfNeeded(nullableSyntax.QuestionToken, typeArgument);
@@ -584,7 +584,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return TypeWithAnnotations.Create(new ExtendedErrorTypeSymbol(left, LookupResultKind.NotATypeOrNamespace, diagnostics.Add(ErrorCode.ERR_ColColWithTypeAlias, node.Alias.Location, node.Alias.Identifier.Text)));
                 }
 
-                return this.BindSimpleNamespaceOrTypeOrAliasSymbol(node.Name, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, left);
+                return this.BindSimpleNamespaceOrTypeOrAliasSymbol(node.Name, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, left, allowInferredTypeArgs: allowInferredType);
             }
 
             NamespaceOrTypeOrAliasSymbolWithAnnotations bindPointer()
@@ -629,29 +629,35 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             bool permitDimensions,
             ConsList<TypeSymbol> basesBeingResolved,
-            bool disallowRestrictedTypes)
+            bool disallowRestrictedTypes,
+            bool allowInferredElementType = false)
         {
-            TypeWithAnnotations type = BindType(node.ElementType, diagnostics, basesBeingResolved);
-            if (type.IsStatic)
-            {
-                // CS0719: '{0}': array elements cannot be of static type
-                Error(diagnostics, ErrorCode.ERR_ArrayOfStaticClass, node.ElementType, type.Type);
-            }
+            TypeWithAnnotations type = BindType(node.ElementType, diagnostics, basesBeingResolved, allowInferredType: allowInferredElementType);
 
-            if (disallowRestrictedTypes)
+            // We don't know at this time which type will have the elements.
+            if (!type.IsInferredType)
             {
-                // Restricted types cannot be on the heap, but they can be on the stack, so are allowed in a stackalloc
-                if (ShouldCheckConstraints)
+                if (type.IsStatic)
                 {
-                    if (type.IsRestrictedType())
-                    {
-                        // CS0611: Array elements cannot be of type '{0}'
-                        Error(diagnostics, ErrorCode.ERR_ArrayElementCantBeRefAny, node.ElementType, type.Type);
-                    }
+                    // CS0719: '{0}': array elements cannot be of static type
+                    Error(diagnostics, ErrorCode.ERR_ArrayOfStaticClass, node.ElementType, type.Type);
                 }
-                else
+
+                if (disallowRestrictedTypes)
                 {
-                    diagnostics.Add(new LazyArrayElementCantBeRefAnyDiagnosticInfo(type), node.ElementType.GetLocation());
+                    // Restricted types cannot be on the heap, but they can be on the stack, so are allowed in a stackalloc
+                    if (ShouldCheckConstraints)
+                    {
+                        if (type.IsRestrictedType())
+                        {
+                            // CS0611: Array elements cannot be of type '{0}'
+                            Error(diagnostics, ErrorCode.ERR_ArrayElementCantBeRefAny, node.ElementType, type.Type);
+                        }
+                    }
+                    else
+                    {
+                        diagnostics.Add(new LazyArrayElementCantBeRefAnyDiagnosticInfo(type), node.ElementType.GetLocation());
+                    }
                 }
             }
 
@@ -673,7 +679,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return type;
         }
 
-        private TypeSymbol BindTupleType(TupleTypeSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved)
+        private TypeSymbol BindTupleType(TupleTypeSyntax syntax, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved, bool allowInferredTypeArgs = false)
         {
             MessageID.IDS_FeatureTuples.CheckFeatureAvailability(diagnostics, syntax);
 
@@ -690,7 +696,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 var argumentSyntax = syntax.Elements[i];
 
-                var argumentType = BindType(argumentSyntax.Type, diagnostics, basesBeingResolved);
+                var argumentType = BindType(argumentSyntax.Type, diagnostics, basesBeingResolved, allowInferredType: allowInferredTypeArgs);
                 types.Add(argumentType);
 
                 string name = null;
@@ -819,7 +825,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             ConsList<TypeSymbol> basesBeingResolved,
             bool suppressUseSiteDiagnostics,
-            NamespaceOrTypeSymbol qualifierOpt = null)
+            NamespaceOrTypeSymbol qualifierOpt = null,
+            bool allowInferredTypeArgs = false)
         {
             // Note that the comment above is a small lie; there is no such thing as the "simple name portion" of
             // a qualified alias member expression. A qualified alias member expression has the form
@@ -837,7 +844,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return BindNonGenericSimpleNamespaceOrTypeOrAliasSymbol((IdentifierNameSyntax)syntax, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, qualifierOpt);
 
                 case SyntaxKind.GenericName:
-                    return BindGenericSimpleNamespaceOrTypeOrAliasSymbol((GenericNameSyntax)syntax, diagnostics, basesBeingResolved, qualifierOpt);
+                    return BindGenericSimpleNamespaceOrTypeOrAliasSymbol((GenericNameSyntax)syntax, diagnostics, basesBeingResolved, qualifierOpt, allowInferredTypeArgs: allowInferredTypeArgs);
             }
         }
 
@@ -846,7 +853,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             ConsList<TypeSymbol> basesBeingResolved,
             bool suppressUseSiteDiagnostics,
-            NamespaceOrTypeSymbol qualifierOpt)
+            NamespaceOrTypeSymbol qualifierOpt,
+            bool allowInferredType = false)
         {
             var identifierValueText = node.Identifier.ValueText;
 
@@ -860,6 +868,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return TypeWithAnnotations.Create(new ExtendedErrorTypeSymbol(
                     Compilation.Assembly.GlobalNamespace, identifierValueText, 0,
                     new CSDiagnosticInfo(ErrorCode.ERR_SingleTypeNameNotFound, identifierValueText)));
+            }
+
+            // The identifier represent an inferred type.
+            if (string.Equals(identifierValueText, "_") && allowInferredType)
+            {
+                return NamespaceOrTypeOrAliasSymbolWithAnnotations.CreateUnannotated(AreNullableAnnotationsEnabled(node.Identifier), new SourceInferredTypeSymbol(node));
             }
 
             var errorResult = CreateErrorIfLookupOnTypeParameter(node.Parent, qualifierOpt, identifierValueText, 0, diagnostics);
@@ -1151,7 +1165,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             GenericNameSyntax node,
             BindingDiagnosticBag diagnostics,
             ConsList<TypeSymbol> basesBeingResolved,
-            NamespaceOrTypeSymbol qualifierOpt)
+            NamespaceOrTypeSymbol qualifierOpt,
+            bool allowInferredTypeArgs = false)
         {
             // We are looking for a namespace, alias or type name and the user has given
             // us an identifier followed by a type argument list. Therefore they
@@ -1239,7 +1254,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
             else
             {
-                var boundTypeArguments = BindTypeArguments(typeArguments, diagnostics, basesBeingResolved);
+                var boundTypeArguments = BindTypeArguments(typeArguments, diagnostics, basesBeingResolved, allowInferredTypes: allowInferredTypeArgs);
 
                 // It's not an unbound type expression, so we must have type arguments, and we have a
                 // generic type of the correct arity in hand (possibly an error type). Bind the type
@@ -1334,19 +1349,19 @@ namespace Microsoft.CodeAnalysis.CSharp
             return null;
         }
 
-        private ImmutableArray<TypeWithAnnotations> BindTypeArguments(SeparatedSyntaxList<TypeSyntax> typeArguments, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null)
+        private ImmutableArray<TypeWithAnnotations> BindTypeArguments(SeparatedSyntaxList<TypeSyntax> typeArguments, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null, bool allowInferredTypes = false)
         {
             Debug.Assert(typeArguments.Count > 0);
             var args = ArrayBuilder<TypeWithAnnotations>.GetInstance(typeArguments.Count);
             foreach (var argSyntax in typeArguments)
             {
-                args.Add(BindTypeArgument(argSyntax, diagnostics, basesBeingResolved));
+                args.Add(BindTypeArgument(argSyntax, diagnostics, basesBeingResolved, allowInferredTypes));
             }
 
             return args.ToImmutableAndFree();
         }
 
-        private TypeWithAnnotations BindTypeArgument(TypeSyntax typeArgument, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null)
+        private TypeWithAnnotations BindTypeArgument(TypeSyntax typeArgument, BindingDiagnosticBag diagnostics, ConsList<TypeSymbol> basesBeingResolved = null, bool allowInferredType = false)
         {
             // BackCompat.  The compiler would previously suppress reporting errors for pointers in generic types.  This
             // was intended so you would get a specific error in CheckBasicConstraints.CheckBasicConstraints for a type
@@ -1361,7 +1376,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             var arg = typeArgument.Kind() == SyntaxKind.OmittedTypeArgument
                 ? TypeWithAnnotations.Create(UnboundArgumentErrorTypeSymbol.Instance)
-                : binder.BindType(typeArgument, diagnostics, basesBeingResolved);
+                : binder.BindType(typeArgument, diagnostics, basesBeingResolved, allowInferredType: allowInferredType);
 
             return arg;
         }
@@ -1585,7 +1600,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             SimpleNameSyntax rightName,
             BindingDiagnosticBag diagnostics,
             ConsList<TypeSymbol> basesBeingResolved,
-            bool suppressUseSiteDiagnostics)
+            bool suppressUseSiteDiagnostics,
+            bool allowInferredTypeArgs = false)
         {
             var left = BindNamespaceOrTypeSymbol(leftName, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics: false).NamespaceOrTypeSymbol;
             ReportDiagnosticsIfObsolete(diagnostics, left, leftName, hasBaseReceiver: false);
@@ -1602,7 +1618,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             // since the name is qualified, it cannot result in a using alias symbol, only a type or namespace
-            var right = this.BindSimpleNamespaceOrTypeOrAliasSymbol(rightName, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, left);
+            var right = this.BindSimpleNamespaceOrTypeOrAliasSymbol(rightName, diagnostics, basesBeingResolved, suppressUseSiteDiagnostics, left, allowInferredTypeArgs: allowInferredTypeArgs);
 
             // If left name bound to an unbound generic type
             // and right name bound to a generic type, we must

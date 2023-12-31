@@ -1977,6 +1977,11 @@
         <target state="translated">Die Einschränkungen "class", "struct", "unmanaged", "notnull" und "default" können nicht kombiniert oder dupliziert werden und müssen in der Einschränkungsliste zuerst angegeben werden.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ERR_TypeHintsInDynamicObjectCreation">
+        <source>Can't use inferred type arguments in object creation containing dynamic arguments.</source>
+        <target state="new">Can't use inferred type arguments in object creation containing dynamic arguments.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ERR_TypeIsNotAnInterpolatedStringHandlerType">
         <source>'{0}' is not an interpolated string handler type.</source>
         <target state="translated">"{0}" ist kein interpolierter Zeichenfolgenhandlertyp.</target>
@@ -4873,6 +4878,16 @@
         <target state="translated">Der Tupelelementname wird ignoriert, weil ein anderer oder gar kein Name auf der anderen Seite des ==- oder !=-Tupeloperators angegeben wurde.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall_Title">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">Der Name des Typparameters "{0}" und der Name des Typparameters der äußeren Methode "{1}" sind identisch.</target>
@@ -4951,6 +4966,16 @@
       <trans-unit id="WRN_UndecoratedCancellationTokenParameter_Title">
         <source>Async-iterator member has one or more parameters of type 'CancellationToken' but none of them is decorated with the 'EnumeratorCancellation' attribute, so the cancellation token parameter from the generated 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' will be unconsumed</source>
         <target state="translated">Der Async-Iterator-Member weist mindestens einen Parameter vom Typ "CancellationToken" auf, aber keiner der Parameter umfasst das Attribut "EnumeratorCancellation", deshalb wird der Parameter für das Abbruchtoken aus dem generierten "IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator" nicht verwendet.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed_Title">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_UninitializedNonNullableField">
