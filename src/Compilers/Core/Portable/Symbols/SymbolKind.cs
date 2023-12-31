@@ -126,6 +126,8 @@ namespace Microsoft.CodeAnalysis
         /// </summary>
         internal const SymbolKind FunctionType = (SymbolKind)255;
 
+        internal const SymbolKind InferredType = (SymbolKind)254;
+
 #if DEBUG
         static SymbolKindInternal()
         {
