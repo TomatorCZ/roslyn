@@ -204,7 +204,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     var memberAccess = (MemberAccessExpressionSyntax)node.Expression;
                     analyzedArguments.Clear();
                     CheckContextForPointerTypes(nested, diagnostics, result); // BindExpression does this after calling BindExpressionInternal
-                    boundExpression = BindMemberAccessWithBoundLeft(memberAccess, result, memberAccess.Name, memberAccess.OperatorToken, invoked: true, indexed: false, diagnostics);
+                    boundExpression = BindMemberAccessWithBoundLeft(memberAccess, result, memberAccess.Name, memberAccess.OperatorToken, invoked: true, indexed: false, diagnostics, allowInferredTypeArgs: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference));
                 }
 
                 invocations.Free();
