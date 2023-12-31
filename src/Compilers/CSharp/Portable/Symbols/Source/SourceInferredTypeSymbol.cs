@@ -88,5 +88,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Source
         internal override TypeSymbol SetNullabilityForReferenceTypes(Func<TypeWithAnnotations, TypeWithAnnotations> transform) => throw ExceptionUtilities.Unreachable();
 
         internal override IEnumerable<(MethodSymbol Body, MethodSymbol Implemented)> SynthesizedInterfaceMethodImpls() => throw ExceptionUtilities.Unreachable();
+
+        internal override string GetDebuggerDisplay()
+        {
+            return $"InferredType _";
+        }
     }
 }
