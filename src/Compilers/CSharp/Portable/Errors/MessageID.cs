@@ -279,6 +279,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         IDS_StringEscapeCharacter = MessageBase + 12839,
 
         IDS_ImplicitIndexerInitializer = MessageBase + 12840,
+
+        IDS_FeaturePartialMethodTypeInference = MessageBase + 12841,
+        IDS_FeaturePartialConstructorTypeInference = MessageBase + 12842,
     }
 
     // Message IDs may refer to strings that need to be localized.
@@ -323,6 +326,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             // Check for current experimental features, if any, in the current branch.
             switch (feature)
             {
+                case MessageID.IDS_FeaturePartialMethodTypeInference:
+                    return nameof(MessageID.IDS_FeaturePartialMethodTypeInference);
+                case MessageID.IDS_FeaturePartialConstructorTypeInference:
+                    return nameof(MessageID.IDS_FeaturePartialConstructorTypeInference);
                 default:
                     return null;
             }
