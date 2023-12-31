@@ -8,7 +8,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
-namespace Microsoft.CodeAnalysis.CSharp.Symbols.Source
+namespace Microsoft.CodeAnalysis.CSharp.Symbols
 {
     internal sealed class SourceInferredTypeSymbol : TypeSymbol
     {
