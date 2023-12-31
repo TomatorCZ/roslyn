@@ -26,11 +26,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             switch (node.Kind())
             {
                 case SyntaxKind.IdentifierName:
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics, allowInferredTypeArgs: false);
                 case SyntaxKind.GenericName:
-                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics);
+                    return BindIdentifier((SimpleNameSyntax)node, invoked, indexed, diagnostics, allowInferredTypeArgs: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference));
                 case SyntaxKind.SimpleMemberAccessExpression:
                 case SyntaxKind.PointerMemberAccessExpression:
-                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics);
+                    return BindMemberAccess((MemberAccessExpressionSyntax)node, invoked, indexed, diagnostics, allowInferredTypeArgs: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference));
                 case SyntaxKind.ParenthesizedExpression:
                     return BindMethodGroup(((ParenthesizedExpressionSyntax)node).Expression, invoked: false, indexed: false, diagnostics: diagnostics);
                 default:
