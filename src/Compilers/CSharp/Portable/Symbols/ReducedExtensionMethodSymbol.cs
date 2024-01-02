@@ -152,7 +152,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 arguments[i] = argument;
             }
 
-            var typeArgs = MethodTypeInferrer.InferTypeArgumentsFromFirstArgument(
+            var typeArgs = TypeInferrer.InferTypeArgumentsFromFirstArgument(
                 compilation,
                 conversions,
                 method,

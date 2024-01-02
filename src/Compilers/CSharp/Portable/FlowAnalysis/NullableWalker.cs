@@ -7387,12 +7387,15 @@ namespace Microsoft.CodeAnalysis.CSharp
             refKinds.Free();
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
+            var renamedTypeParameters = definition.TypeParameters.Select(x => (TypeParameterSymbol)new RenamedTypeParameterSymbol(x)).ToImmutableArray();
+            var map = new TypeMap(definition.TypeParameters, renamedTypeParameters, true);
+
             var result = TypeInferrer.InferMethod(
                 _binder,
                 _conversions,
-                definition.TypeParameters,
+                renamedTypeParameters,
                 definition.ContainingType,
-                parameterTypes,
+                parameterTypes.Select(x => x.WithType(map.SubstituteType(x.Type).Type)).ToImmutableArray(),
                 parameterRefKinds,
                 arguments,
                 ref discardedUseSiteInfo,

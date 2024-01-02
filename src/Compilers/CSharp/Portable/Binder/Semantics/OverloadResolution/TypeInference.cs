@@ -8,6 +8,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
@@ -16,6 +17,19 @@ using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
+    internal static class PooledDictionaryIgnoringNullableModifiersForReferenceTypes
+    {
+        private static readonly ObjectPool<PooledDictionary<NamedTypeSymbol, NamedTypeSymbol>> s_poolInstance
+            = PooledDictionary<NamedTypeSymbol, NamedTypeSymbol>.CreatePool(Symbols.SymbolEqualityComparer.IgnoringNullable);
+
+        internal static PooledDictionary<NamedTypeSymbol, NamedTypeSymbol> GetInstance()
+        {
+            var instance = s_poolInstance.Allocate();
+            Debug.Assert(instance.Count == 0);
+            return instance;
+        }
+    }
+
     internal readonly struct TypeInferenceResult
     {
         public readonly ImmutableArray<TypeWithAnnotations> InferredTypeArguments;
@@ -215,6 +229,9 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<BoundExpression> arguments,
             ImmutableArray<RefKind> formalParameterRefKinds)
         {
+            if (parameterTypes.IsDefault || arguments.IsDefault)
+                return;
+
             int min = Math.Min(parameterTypes.Length, arguments.Length);
             targets.AddRange(parameterTypes, min);
             sources.AddRange(arguments, min);
@@ -352,9 +369,106 @@ namespace Microsoft.CodeAnalysis.CSharp
                 inferredTypeParameters
             );
         }
+
+        public static ImmutableArray<TypeWithAnnotations> InferTypeArgumentsFromFirstArgument(
+            CSharpCompilation compilation,
+            ConversionsBase conversions,
+            MethodSymbol method,
+            ImmutableArray<BoundExpression> arguments,
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            if (!CanInferTypeArgumentsFromFirstArgument(compilation, conversions, method, arguments, ref useSiteInfo, out var inferrer))
+            {
+                return default;
+            }
+
+            return inferrer.GetInferredTypeVariables(out _).Where(x => x.Item1.Kind == SymbolKind.TypeParameter).Select(x => x.Item2).AsImmutable();
+        }
+
+        public static bool CanInferTypeArgumentsFromFirstArgument(
+            CSharpCompilation compilation,
+            ConversionsBase conversions,
+            MethodSymbol method,
+            ImmutableArray<BoundExpression> arguments,
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            out TypeInferrer inferrer,
+            ImmutableArray<TypeWithAnnotations> typeArgumentHints = default,
+            ImmutableArray<SourceInferredTypeSymbol> inferredTypeParameters = default)
+        {
+            Debug.Assert((object)method != null);
+            Debug.Assert(method.Arity > 0);
+            Debug.Assert(!arguments.IsDefault);
+
+            // We need at least one formal parameter type and at least one argument.
+            if ((method.ParameterCount < 1) || (arguments.Length < 1))
+            {
+                inferrer = default;
+                return false;
+            }
+
+            Debug.Assert(!method.GetParameterType(0).IsDynamic());
+
+            var constructedFromMethod = method.ConstructedFrom;
+
+            var targets = ArrayBuilder<TypeWithAnnotations>.GetInstance();
+            var sources = ArrayBuilder<BoundExpression>.GetInstance();
+            var boundKinds = ArrayBuilder<ExactOrShapeOrBoundsKind>.GetInstance();
+
+            //Add first argument
+            AddArguments(targets, sources, boundKinds,
+                constructedFromMethod.GetParameterTypes().Take(1).AsImmutable(),
+                arguments.Take(1).AsImmutable(),
+                (!constructedFromMethod.ParameterRefKinds.IsDefault && constructedFromMethod.ParameterRefKinds.Length > 0) ? constructedFromMethod.ParameterRefKinds.Take(1).AsImmutable() : default
+            );
+
+            //Add type hints
+            AddTypeArguments(targets, sources, boundKinds, constructedFromMethod.TypeParameters, typeArgumentHints);
+
+            var typeVariables = ArrayBuilder<TypeSymbol>.GetInstance();
+            typeVariables.AddRange(constructedFromMethod.TypeParameters);
+            if (!inferredTypeParameters.IsDefault)
+                typeVariables.AddRange(inferredTypeParameters);
+
+            inferrer = new TypeInferrer(
+                compilation,
+                conversions,
+                constructedFromMethod.ContainingType,
+                typeVariables.ToImmutableAndFree(),
+                targets.ToImmutableAndFree(),
+                sources.ToImmutableAndFree(),
+                boundKinds.ToImmutableAndFree(),
+                extensions: null);
+
+            if (!inferrer.InferTypeArgumentsInFirstGivenTarget(ref useSiteInfo))
+            {
+                return false;
+            }
+
+
+            return true;
+        }
         #endregion
 
         #region Phases
+        private bool InferTypeArgumentsInFirstGivenTarget(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            foreach (var source in _sources)
+            {
+                if (!IsReallyAType(source.Type))
+                    return false;
+            }
+
+            //Do inference
+            InferTypeVarsFirstPhase(ref useSiteInfo);
+            InferTypeVarsSecondPhase(null, ref useSiteInfo);
+
+            //Check if the first target doesn't contain unfixed type parameter.
+            var substituted = _map.SubstituteType(_targets[0]).Type;
+            if (substituted.IsInferred() || substituted.ContainsMethodTypeParameter())
+                return false;
+
+            return true;
+        }
 
         private TypeInferenceResult InferTypeVars(Binder binder, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
@@ -2344,7 +2458,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private InferenceResult FixDependentParameters(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Shape) && (inferrer.AnyDependsOn(index, DependencyKind.Function) || inferrer.AnyDependsOn(index, DependencyKind.Bound) || inferrer.AnyDependsOn(index, DependencyKind.Shape)), ref useSiteInfo);
+            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Shape) && (inferrer.AnyDependsOn(index, DependencyKind.Function) || inferrer.AnyDependsOn(index, DependencyKind.Bound)), ref useSiteInfo);
         }
 
         private InferenceResult FixParameters(

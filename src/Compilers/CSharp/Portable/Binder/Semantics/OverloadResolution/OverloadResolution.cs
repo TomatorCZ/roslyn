@@ -3683,6 +3683,9 @@ outerDefault:
 
         public static ImmutableArray<SourceInferredTypeSymbol> GetInferredSymbols(ImmutableArray<TypeWithAnnotations> typeArgumentList)
         {
+            if (typeArgumentList.IsDefault)
+                return default;
+
             var inferredArguments = ArrayBuilder<SourceInferredTypeSymbol>.GetInstance();
             for (int i = 0; i < typeArgumentList.Length; i++)
                 SeekTypeVars(inferredArguments, typeArgumentList[i]);
@@ -3719,17 +3722,21 @@ outerDefault:
             // from the original definition, not the method as it exists as a member of 
             // a possibly constructed generic type, is exceedingly subtle. See the comments
             // in "Infer" for details.
+            var inferredTypes = GetInferredSymbols(typeArgumentHints);
+            // We have to rename type parameters
+            var renamedTypeParameters = originalTypeParameters.Select(x => (TypeParameterSymbol)new RenamedTypeParameterSymbol(x)).ToImmutableArray();
+            var map = new TypeMap(originalTypeParameters, renamedTypeParameters, true);
 
             var inferenceResult = TypeInferrer.InferMethod(
                 _binder,
                 _binder.Conversions,
-                originalTypeParameters,
+                renamedTypeParameters,
                 method.ContainingType,
-                originalEffectiveParameters.ParameterTypes,
+                originalEffectiveParameters.ParameterTypes.Select(x => x.WithType(map.SubstituteType(x.Type).Type)).ToImmutableArray(),
                 originalEffectiveParameters.ParameterRefKinds,
                 args,
                 ref useSiteInfo,
-                GetInferredSymbols(typeArgumentHints),
+                inferredTypes,
                 typeArgumentHints);
 
             if (inferenceResult.Success)
@@ -3741,13 +3748,15 @@ outerDefault:
 
             if (arguments.IsExtensionMethodInvocation)
             {
-                var canInfer = MethodTypeInferrer.CanInferTypeArgumentsFromFirstArgument(
+                var canInfer = TypeInferrer.CanInferTypeArgumentsFromFirstArgument(
                     _binder.Compilation,
                     _binder.Conversions,
-                    method,
+                    method.Construct(renamedTypeParameters.CastArray<TypeSymbol>()),
                     args,
                     useSiteInfo: ref useSiteInfo,
-                    out _);
+                    out _,
+                    typeArgumentHints,
+                    inferredTypes);
                 if (!canInfer)
                 {
                     hasTypeArgumentsInferredFromFunctionType = false;

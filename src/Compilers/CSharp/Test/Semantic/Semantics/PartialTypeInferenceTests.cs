@@ -371,6 +371,31 @@ class P {
     );
             //TODO: Signatures
         }
+
+        [Fact]
+        public void PartialMethodTypeInference_ExtensionMethods()
+        {
+            TestCallSites("""
+public class C {
+    public void M() {
+        new G<int>().F();
+    }
+}
+
+public class G<T> {}
+
+public static class A {
+    public static void F<T1, T2>(this G<T1> p) {
+    }
+}
+""",
+        Symbols.Methods,
+                        ImmutableArray.Create(
+                            // (3,22): error CS0411: The type arguments for method 'A.F<T1, T2>(G<T1>)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                            //         new G<int>().F();
+                            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F").WithArguments("A.F<T1, T2>(G<T1>)").WithLocation(3, 22)
+                        ));
+        }
         #endregion
 
         #region PartialConstructorTypeInference
