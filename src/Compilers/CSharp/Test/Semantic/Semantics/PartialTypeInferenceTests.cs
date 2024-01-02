@@ -303,6 +303,7 @@ class P {
         public void PartialMethodTypeInference_Nullable()
         {
             TestCallSites("""
+using System;
 #nullable enable
 class P {
     void M1() 
@@ -315,48 +316,31 @@ class P {
         C2<int, string?> temp8 = new C2<int, string?>();
         C2<string?, int> temp9 = new C2<string?, int>();
 
-        // Inferred: [T1 = int, T2 = string!]
-        F8<int, _>(temp5);  
-        // Inferred: [T1 = int, T2 = string!] 
-        F8<int, _>(temp6);
-        // Inferred: [T1 = int?, T2 = string!] 
-        F8<int?, _>(temp5); 
-        // Inferred: [T1 = int?, T2 = string!]
-        F8<int?, _>(temp6);  
-        // Error: _ is non nullable
-        F9<int, _>(temp5a);
-        // Inferred: [T1 = int, T2 = string!]
-        F9<int, _>(temp6);
-        // Error: _ is non nullable
-        F9<int?, _>(temp5b);
-        // Inferred: [T1 = int?, T2 = string!]
-        F9<int?, _>(temp6);  
+        F8<int, _>(temp5); //-P.F8<int, string>(string?)
+        F8<int, _>(temp6); //-P.F8<int, string>(string?)
+        F8<int?, _>(temp5); //-P.F8<int?, string>(string?)
+        F8<int?, _>(temp6); //-P.F8<int?, string>(string?)
+        F9<int, _>(temp5a); //-P.F9<int, string?>(string?)
+        F9<int, _>(temp6); //-P.F9<int, string>(string)
+        F9<int?, _>(temp5b); //-P.F9<int?, string?>(string?)
+        F9<int?, _>(temp6); //-P.F9<int?, string>(string)
         
-        //Inferred: [T1 = I2<int, string?>!] Can convert string to string? because of covariance
-        F10<I2<_, string?>>(temp7);
-        //Error: Can't convert string? to string because of invariance
-        F10<C2<_, string?>>(temp7); 
-        //Inferred: [T1 = I2<System.Int32, System.String!>!]
-        F10<I2<_, _>>(temp7);
-        //Inferred: [T1 = C2<System.Int32, System.String!>!]
-        F10<C2<_, _>>(temp7);
-        //Inferred: [T1 = I2<System.Int32, System.String?>!]
-        F10<I2<_, _?>>(temp8);
-        //Inferred: [T1 = C2<System.Int32, System.String?>!]
-        F10<C2<_, _?>>(temp8);
-        //Error: Can't convert string? to string because of covariance
-        F10<I2<_, string>>(temp8);
-        //Error: Can't convert string? to string because of invariance
-        F10<C2<_, string>>(temp8);
-        //Inferred: [T1 = I2<System.String!, System.Int32>!] Can convert string to string? because of contravariance
-        F10<I2<_, int>>(temp9); 
+        F10<I2<_, string?>>(temp7); //-P.F10<P.I2<int, string?>>(P.I2<int, string?>)
+        //Warning: Can't convert string? to string because of invariance
+        F10<C2<_, string?>>(temp7); //-P.F10<P.C2<int, string?>>(P.C2<int, string?>)
+        F10<I2<_, _>>(temp7); //-P.F10<P.I2<int, string>>(P.I2<int, string>)
+        F10<C2<_, _>>(temp7); //-P.F10<P.C2<int, string>>(P.C2<int, string>)
+        F10<I2<_, _?>>(temp8); //-P.F10<P.I2<int, string?>>(P.I2<int, string?>)
+        F10<C2<_, _?>>(temp8); //-P.F10<P.C2<int, string?>>(P.C2<int, string?>)
+        //Warning: Can't convert string? to string because of covariance
+        F10<I2<_, string>>(temp8); //-P.F10<P.I2<int, string>>(P.I2<int, string>)
+        //Warning: Can't convert string? to string because of invariance
+        F10<C2<_, string>>(temp8); //-P.F10<P.C2<int, string>>(P.C2<int, string>)
+        F10<I2<_, int>>(temp9); //-P.F10<P.I2<string?, int>>(P.I2<string?, int>)
         
-        //Inferred: [T1 = string?]
-        F10<_?>("maybe null");
-        //Inferred: [T1 = I2<string?, int>!]
-        F10<I2<_, _?>>(temp7);
-        //Inferred: [T1 = System.Int32] in order to be coherent with the current inference.
-        F10<_?>(1);
+        F10<_?>("maybe null"); //-P.F10<string?>(string?)
+        F10<I2<_, _?>>(temp7); //-P.F10<P.I2<int, string?>>(P.I2<int, string?>)
+        F10<_?>(1); //-P.F10<int>(int)
         //Error: Can't be inferred because void F12<T>(Nullable<T> p ) {} and F(1) is not inferred either.
         F10<Nullable<_>>(1);
     }
@@ -369,10 +353,22 @@ class P {
     void F10<T1>(T1 p1) {}
 }
 """,
-        Symbols.Methods
+        Symbols.Methods,
+                       ImmutableArray.Create(
+                            // (25,29): warning CS8620: Argument of type 'P.C2<int, string>' cannot be used for parameter 'p1' of type 'P.C2<int, string?>' in 'void P.F10<C2<int, string?>>(C2<int, string?> p1)' due to differences in the nullability of reference types.
+                            //         F10<C2<_, string?>>(temp7); //-P.F10<P.C2<int, string?>>(P.C2<int, string?>)
+                            Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp7").WithArguments("P.C2<int, string>", "P.C2<int, string?>", "p1", "void P.F10<C2<int, string?>>(C2<int, string?> p1)").WithLocation(25, 29),
+                            // (31,28): warning CS8620: Argument of type 'P.C2<int, string?>' cannot be used for parameter 'p1' of type 'P.I2<int, string>' in 'void P.F10<I2<int, string>>(I2<int, string> p1)' due to differences in the nullability of reference types.
+                            //         F10<I2<_, string>>(temp8); //-P.F10<P.I2<int, string>>(P.I2<int, string>)
+                            Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp8").WithArguments("P.C2<int, string?>", "P.I2<int, string>", "p1", "void P.F10<I2<int, string>>(I2<int, string> p1)").WithLocation(31, 28),
+                            // (33,28): warning CS8620: Argument of type 'P.C2<int, string?>' cannot be used for parameter 'p1' of type 'P.C2<int, string>' in 'void P.F10<C2<int, string>>(C2<int, string> p1)' due to differences in the nullability of reference types.
+                            //         F10<C2<_, string>>(temp8); //-P.F10<P.C2<int, string>>(P.C2<int, string>)
+                            Diagnostic(ErrorCode.WRN_NullabilityMismatchInArgument, "temp8").WithArguments("P.C2<int, string?>", "P.C2<int, string>", "p1", "void P.F10<C2<int, string>>(C2<int, string> p1)").WithLocation(33, 28),
+                            // (40,9): error CS0411: The type arguments for method 'P.F10<T1>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                            //         F10<Nullable<_>>(1);
+                            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F10<Nullable<_>>").WithArguments("P.F10<T1>(T1)").WithLocation(40, 9)
+                       )
     );
-
-            //TODO: Warnings and errors
             //TODO: Signatures
         }
         #endregion

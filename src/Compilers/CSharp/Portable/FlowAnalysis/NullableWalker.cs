@@ -6295,7 +6295,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         // https://github.com/dotnet/roslyn/issues/29863 Record in the node whether type
         // arguments were implicit, to allow for cases where the syntax is not an
         // invocation (such as a synthesized call from a query interpretation).
-        private static bool HasImplicitTypeArguments(BoundNode node)
+        private static bool HasImplicitOrInferredTypeArguments(BoundNode node)
         {
             if (node is BoundCollectionElementInitializer { AddMethod: { TypeArgumentsWithAnnotations: { IsEmpty: false } } })
             {
@@ -6303,6 +6303,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             if (node is BoundForEachStatement { EnumeratorInfoOpt: { GetEnumeratorInfo: { Method: { TypeArgumentsWithAnnotations: { IsEmpty: false } } } } })
+            {
+                return true;
+            }
+
+            if (node is BoundCall bound && !bound.OriginalTypeArgsOpt.IsDefault && bound.OriginalTypeArgsOpt.Any(x => x.Type.IsInferred()))
             {
                 return true;
             }
@@ -6448,9 +6453,15 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // Re-infer method type parameters
                 if (method?.IsGenericMethod == true)
                 {
-                    if (HasImplicitTypeArguments(node))
+                    if (HasImplicitOrInferredTypeArguments(node))
                     {
-                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded);
+                        ImmutableArray<TypeWithAnnotations> typeArguments = default;
+                        if (node is BoundCall call)
+                        {
+                            typeArguments = call.OriginalTypeArgsOpt;
+                        }
+
+                        method = InferMethodTypeArguments(method, GetArgumentsForMethodTypeInference(results, argumentsNoConversions), refKindsOpt, argsToParamsOpt, expanded, typeArguments);
                         parametersOpt = method.Parameters;
                     }
                     if (ConstraintsHelper.RequiresChecking(method))
@@ -7343,7 +7354,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<BoundExpression> arguments,
             ImmutableArray<RefKind> argumentRefKindsOpt,
             ImmutableArray<int> argsToParamsOpt,
-            bool expanded)
+            bool expanded,
+            ImmutableArray<TypeWithAnnotations> typeArguments = default)
         {
             Debug.Assert(method.IsGenericMethod);
 
@@ -7375,7 +7387,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             refKinds.Free();
 
             var discardedUseSiteInfo = CompoundUseSiteInfo<AssemblySymbol>.Discarded;
-            var result = MethodTypeInferrer.Infer(
+            var result = TypeInferrer.InferMethod(
                 _binder,
                 _conversions,
                 definition.TypeParameters,
@@ -7384,7 +7396,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                 parameterRefKinds,
                 arguments,
                 ref discardedUseSiteInfo,
-                new MethodInferenceExtensions(this));
+                inferredTypeParameters: OverloadResolution.GetInferredSymbols(typeArguments),
+                typeArguments: typeArguments,
+                extensions: new InferenceExtensions(this));
 
             if (!result.Success)
             {
@@ -7394,11 +7408,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             return definition.Construct(result.InferredTypeArguments);
         }
 
-        private sealed class MethodInferenceExtensions : MethodTypeInferrer.Extensions
+        private sealed class InferenceExtensions : TypeInferrer.Extensions
         {
             private readonly NullableWalker _walker;
 
-            internal MethodInferenceExtensions(NullableWalker walker)
+            internal InferenceExtensions(NullableWalker walker)
             {
                 _walker = walker;
             }
@@ -7426,10 +7440,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                         return ((BoundExpressionWithNullability)expr).NullableAnnotation;
                     case BoundKind.MethodGroup:
                     case BoundKind.UnboundLambda:
-                    case BoundKind.UnconvertedObjectCreationExpression:
                     case BoundKind.ConvertedTupleLiteral:
-                    case BoundKind.UnconvertedCollectionExpression:
                         return NullableAnnotation.NotAnnotated;
+                    case BoundKind.TypeExpression:
+                        return ((BoundTypeExpression)expr).TypeWithAnnotations.NullableAnnotation;
                     default:
                         Debug.Assert(false); // unexpected value
                         return NullableAnnotation.Oblivious;
