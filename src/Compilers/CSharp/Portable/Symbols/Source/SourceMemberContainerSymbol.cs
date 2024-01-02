@@ -483,7 +483,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal static bool IsReservedTypeName(string? name)
         {
-            return name is { Length: > 0 } && name.All(c => c >= 'a' && c <= 'z');
+            return name is { Length: > 0 } && (name.All(c => c >= 'a' && c <= 'z') || name == SyntaxFacts.GetText(SyntaxKind.UnderscoreToken));
         }
 
         internal static void ReportReservedTypeName(string? name, CSharpCompilation compilation, DiagnosticBag? diagnostics, Location location)
@@ -493,7 +493,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 return;
             }
 
-            if (reportIfContextual(SyntaxKind.RecordKeyword, MessageID.IDS_FeatureRecords, ErrorCode.WRN_RecordNamedDisallowed)
+            if (reportIfContextualAndFeatureEnabled(SyntaxKind.UnderscoreToken, MessageID.IDS_FeaturePartialMethodTypeInference, ErrorCode.WRN_UnderscoreNamedDisallowed)
+                || reportIfContextual(SyntaxKind.RecordKeyword, MessageID.IDS_FeatureRecords, ErrorCode.WRN_RecordNamedDisallowed)
                 || reportIfContextual(SyntaxKind.RequiredKeyword, MessageID.IDS_FeatureRequiredMembers, ErrorCode.ERR_RequiredNameDisallowed)
                 || reportIfContextual(SyntaxKind.FileKeyword, MessageID.IDS_FeatureFileTypes, ErrorCode.ERR_FileTypeNameDisallowed)
                 || reportIfContextual(SyntaxKind.ScopedKeyword, MessageID.IDS_FeatureRefFields, ErrorCode.ERR_ScopedTypeNameDisallowed))
@@ -508,6 +509,17 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             bool reportIfContextual(SyntaxKind contextualKind, MessageID featureId, ErrorCode error)
             {
                 if (name == SyntaxFacts.GetText(contextualKind) && compilation.LanguageVersion >= featureId.RequiredVersion())
+                {
+                    diagnostics.Add(error, location);
+                    return true;
+                }
+
+                return false;
+            }
+
+            bool reportIfContextualAndFeatureEnabled(SyntaxKind contextualKind, MessageID featureId, ErrorCode error)
+            {
+                if (name == SyntaxFacts.GetText(contextualKind) && location.SourceTree?.GetRoot()?.IsFeatureEnabled(featureId) == true)
                 {
                     diagnostics.Add(error, location);
                     return true;

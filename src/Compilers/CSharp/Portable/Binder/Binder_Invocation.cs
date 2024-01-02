@@ -368,6 +368,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                 BoundMethodGroup methodGroup = (BoundMethodGroup)expression;
                 BoundExpression receiver = methodGroup.ReceiverOpt;
 
+                if (!methodGroup.TypeArgumentsOpt.IsDefault && methodGroup.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+                {
+                    methodGroup = ConvertInferredTypeArgsToGenericVersion(methodGroup);
+                    Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, node);
+                }
+
                 // receiver is null if we are calling a static method declared on an outer class via its simple name:
                 if (receiver != null)
                 {
@@ -424,6 +430,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                             break;
                     }
                 }
+            }
+            else if (expression is BoundDynamicMemberAccess expr && !expr.TypeArgumentsOpt.IsDefault && expr.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+            {
+                Error(diagnostics, ErrorCode.WRN_TypeHintsInDynamicCall, node);
+                expression = BindToNaturalType(ConvertInferredTypeArgsToGenericVersion(expr), diagnostics);
             }
             else
             {
@@ -597,6 +608,30 @@ namespace Microsoft.CodeAnalysis.CSharp
             overloadResolutionResult.Free();
             methodGroup.Free();
             return result;
+        }
+
+        private static BoundMethodGroup ConvertInferredTypeArgsToGenericVersion(BoundMethodGroup group)
+        {
+            if (!group.TypeArgumentsOpt.IsDefault && group.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+            {
+                return group.Update(default, group.Name, group.Methods, group.LookupSymbolOpt, group.LookupError, group.Flags, group.FunctionType, group.ReceiverOpt, group.ResultKind);
+            }
+            else
+            {
+                return group;
+            }
+        }
+
+        private static BoundDynamicMemberAccess ConvertInferredTypeArgsToGenericVersion(BoundDynamicMemberAccess dyn)
+        {
+            if (!dyn.TypeArgumentsOpt.IsDefault && dyn.TypeArgumentsOpt.Any(x => x.Type.IsInferred()))
+            {
+                return dyn.Update(dyn.Receiver, default, dyn.Name, dyn.Invoked, dyn.Indexed, dyn.Type);
+            }
+            else
+            {
+                return dyn;
+            }
         }
 
         private static bool HasApplicableConditionalMethod(OverloadResolutionResult<MethodSymbol> results)

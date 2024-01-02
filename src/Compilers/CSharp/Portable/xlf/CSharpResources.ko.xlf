@@ -4873,6 +4873,11 @@
         <target state="translated">튜플 요소 이름은(는) 튜플 == 또는 != 연산자의 반대쪽에서 다른 이름이 지정되었거나 이름이 지정되지 않았기 때문에 무시됩니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">'{0}' 형식 매개 변수가 외부 메서드 '{1}'의 형식 매개 변수와 이름이 같습니다.</target>
@@ -4951,6 +4956,11 @@
       <trans-unit id="WRN_UndecoratedCancellationTokenParameter_Title">
         <source>Async-iterator member has one or more parameters of type 'CancellationToken' but none of them is decorated with the 'EnumeratorCancellation' attribute, so the cancellation token parameter from the generated 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' will be unconsumed</source>
         <target state="translated">비동기 반복기 멤버에 'CancellationToken' 형식의 매개 변수가 하나 이상 있지만, 이 중 'EnumeratorCancellation' 특성으로 데코레이트된 매개 변수가 없으므로 생성된 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator'에서 취소 토큰 매개 변수가 사용되지 않음</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_UninitializedNonNullableField">

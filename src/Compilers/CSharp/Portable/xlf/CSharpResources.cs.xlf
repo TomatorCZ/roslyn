@@ -4873,6 +4873,11 @@
         <target state="translated">Název elementu řazené kolekce členů se ignoruje, protože na druhé straně operátoru == nebo != řazené kolekce členů je určený jiný nebo žádný název.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">Parametr typu {0} má stejný název jako parametr typu z vnější metody {1}.</target>
@@ -4951,6 +4956,11 @@
       <trans-unit id="WRN_UndecoratedCancellationTokenParameter_Title">
         <source>Async-iterator member has one or more parameters of type 'CancellationToken' but none of them is decorated with the 'EnumeratorCancellation' attribute, so the cancellation token parameter from the generated 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' will be unconsumed</source>
         <target state="translated">Člen asynchronního iterátoru má jeden nebo více parametrů typu CancellationToken, ale žádný z nich není dekorovaný atributem EnumeratorCancellation, takže parametr tokenu zrušení z vygenerovaného výrazu IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator se nespotřebuje.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_UninitializedNonNullableField">

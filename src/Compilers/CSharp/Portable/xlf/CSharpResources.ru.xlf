@@ -4874,6 +4874,11 @@
         <target state="translated">Имя элемента кортежа игнорируется, так как на другой стороне оператора == или != кортежа имя имеет другое значение или отсутствует.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">Параметр типа "{0}" имеет то же имя, что и параметр типа во внешнем методе "{1}"</target>
@@ -4952,6 +4957,11 @@
       <trans-unit id="WRN_UndecoratedCancellationTokenParameter_Title">
         <source>Async-iterator member has one or more parameters of type 'CancellationToken' but none of them is decorated with the 'EnumeratorCancellation' attribute, so the cancellation token parameter from the generated 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' will be unconsumed</source>
         <target state="translated">Элемент асинхронного итератора имеет один или несколько параметров типа "CancellationToken", но ни один из них не снабжен атрибутом "EnumeratorCancellation", поэтому параметр токена отмены из созданного "IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator" не будет использован.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_UninitializedNonNullableField">

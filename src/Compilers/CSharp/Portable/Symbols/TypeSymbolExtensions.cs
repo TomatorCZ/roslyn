@@ -133,6 +133,31 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             return type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
         }
 
+        public static bool IsInferred(this TypeSymbol type)
+        {
+            return isInferredType(TypeWithAnnotations.Create(type));
+
+            static bool isInferredType(TypeWithAnnotations type)
+            {
+                if (type.TypeKind == TypeKindInternal.InferredType)
+                    return true;
+
+                if (type.Type is NamedTypeSymbol { TypeArgumentsWithAnnotationsNoUseSiteDiagnostics: { } typeArgs })
+                {
+                    for (int i = 0; i < typeArgs.Length; i++)
+                    {
+                        if (isInferredType(typeArgs[i])) return true;
+                    }
+                    return false;
+                }
+
+                if (type.Type is ArrayTypeSymbol { } arraySymbol)
+                    return isInferredType(arraySymbol.ElementTypeWithAnnotations);
+
+                return false;
+            }
+        }
+
         public static bool IsValidNullableTypeArgument(this TypeSymbol type)
         {
             return type is { IsValueType: true }
@@ -807,6 +832,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     case TypeKind.TypeParameter:
                     case TypeKind.Submission:
                     case TypeKind.Enum:
+                    case TypeKindInternal.InferredType:
                         return null;
 
                     case TypeKindInternal.FunctionType:

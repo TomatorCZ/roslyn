@@ -197,7 +197,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             var typeSymbol = this.Type;
 
-            if (typeSymbol.TypeKind != TypeKind.TypeParameter)
+            if (typeSymbol.TypeKind != TypeKind.TypeParameter && typeSymbol.TypeKind != TypeKindInternal.InferredType)
             {
                 if (!typeSymbol.IsValueType && !typeSymbol.IsErrorType())
                 {
@@ -207,6 +207,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 {
                     return makeNullableT();
                 }
+            }
+
+            if (typeSymbol.TypeKind == TypeKindInternal.InferredType)
+            {
+                return CreateNonLazyType(typeSymbol, NullableAnnotation.Annotated, this.CustomModifiers);
             }
 
             if (((TypeParameterSymbol)typeSymbol).TypeParameterKind == TypeParameterKind.Cref)
@@ -557,6 +562,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         /// Is this the given type parameter?
         /// </summary>
         public bool Is(TypeParameterSymbol other)
+        {
+            return DefaultNullableAnnotation.IsOblivious() && ((object)DefaultType == other) &&
+                   CustomModifiers.IsEmpty;
+        }
+
+        public bool Is(SourceInferredTypeSymbol other)
         {
             return DefaultNullableAnnotation.IsOblivious() && ((object)DefaultType == other) &&
                    CustomModifiers.IsEmpty;

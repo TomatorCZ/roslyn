@@ -215,5 +215,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             return mapping;
         }
+
+        internal TypeVariableMap AsTypeVariableMap()
+        {
+            return new TypeVariableMap(Mapping.Keys.Cast<TypeSymbol>().ToImmutableArray(), Mapping.Values.ToImmutableArray());
+        }
     }
 }

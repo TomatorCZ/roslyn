@@ -6908,7 +6908,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             SimpleNameSyntax right,
             bool invoked,
             bool indexed,
-            BindingDiagnosticBag diagnostics)
+            BindingDiagnosticBag diagnostics,
+            bool allowInferredTypeArgs = false)
         {
             // We have an expression of the form "dynExpr.Name" or "dynExpr.Name<X>"
 
@@ -6917,7 +6918,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 default(SeparatedSyntaxList<TypeSyntax>);
             bool rightHasTypeArguments = typeArgumentsSyntax.Count > 0;
             ImmutableArray<TypeWithAnnotations> typeArgumentsWithAnnotations = rightHasTypeArguments ?
-                BindTypeArguments(typeArgumentsSyntax, diagnostics) :
+                BindTypeArguments(typeArgumentsSyntax, diagnostics, allowInferredTypes: allowInferredTypeArgs) :
                 default(ImmutableArray<TypeWithAnnotations>);
 
             bool hasErrors = false;
@@ -6934,7 +6935,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 for (int i = 0; i < typeArgumentsWithAnnotations.Length; ++i)
                 {
                     var typeArgument = typeArgumentsWithAnnotations[i];
-                    if (typeArgument.Type.IsPointerOrFunctionPointer() || typeArgument.Type.IsRestrictedType())
+                    if (!typeArgument.Type.IsInferred() && (typeArgument.Type.IsPointerOrFunctionPointer() || typeArgument.Type.IsRestrictedType()))
                     {
                         // "The type '{0}' may not be used as a type argument"
                         Error(diagnostics, ErrorCode.ERR_BadTypeArgument, typeArgumentsSyntax[i], typeArgument.Type);
@@ -6998,7 +6999,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // If Goo itself is a dynamic thing (e.g. in `x.Goo.Bar`, `x` is dynamic, and we're
                 // currently checking Bar), then CheckValue will do nothing.
                 boundLeft = CheckValue(boundLeft, BindValueKind.RValue, diagnostics);
-                return BindDynamicMemberAccess(node, boundLeft, right, invoked, indexed, diagnostics);
+                return BindDynamicMemberAccess(node, boundLeft, right, invoked, indexed, diagnostics, allowInferredTypeArgs: allowInferredTypeArgs);
             }
 
             // No member accesses on void

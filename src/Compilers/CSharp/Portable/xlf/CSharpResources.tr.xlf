@@ -4873,6 +4873,11 @@
         <target state="translated">Demetin == veya != işlecinin diğer tarafında farklı bir ad belirtildiğinden ya da bir ad belirtilmediğinden demet öğesi adı yok sayıldı.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">'{0}' tür parametresi, '{1}' dış metodundaki tür parametresi ile aynı ada sahip</target>
@@ -4951,6 +4956,11 @@
       <trans-unit id="WRN_UndecoratedCancellationTokenParameter_Title">
         <source>Async-iterator member has one or more parameters of type 'CancellationToken' but none of them is decorated with the 'EnumeratorCancellation' attribute, so the cancellation token parameter from the generated 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' will be unconsumed</source>
         <target state="translated">Zaman uyumsuz yineleyici üyesinde 'CancellationToken' türünde bir veya daha fazla parametre var ancak bunların hiçbiri 'EnumeratorCancellation' özniteliği ile dekore edilmemiş, bu nedenle oluşturulan 'IAsyncEnumerable&lt;&gt;.GetAsyncEnumerator' öğesindeki iptal belirteci parametresi tüketilmeyecek</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
         <note />
       </trans-unit>
       <trans-unit id="WRN_UninitializedNonNullableField">

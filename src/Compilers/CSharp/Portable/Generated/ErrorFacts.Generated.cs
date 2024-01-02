@@ -337,6 +337,8 @@
                 case ErrorCode.WRN_Experimental:
                 case ErrorCode.WRN_CollectionExpressionRefStructMayAllocate:
                 case ErrorCode.WRN_CollectionExpressionRefStructSpreadMayAllocate:
+                case ErrorCode.WRN_TypeHintsInDynamicCall:
+                case ErrorCode.WRN_UnderscoreNamedDisallowed:
                     return true;
                 default:
                     return false;

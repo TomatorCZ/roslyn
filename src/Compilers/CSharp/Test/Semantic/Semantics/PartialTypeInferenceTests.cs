@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Microsoft.CodeAnalysis.CSharp.UnitTests
 {
-    public partial class PartialTypeInference : CompilingTestBase
+    public partial class PartialTypeInferenceTests : CompilingTestBase
     {
         #region Helpers
         [Flags]
@@ -25,7 +25,8 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
 
         internal static SymbolDisplayFormat TestCallSiteDisplayStringFormat = SymbolDisplayFormat.TestFormat
             .WithParameterOptions(SymbolDisplayFormat.TestFormat.ParameterOptions & ~SymbolDisplayParameterOptions.IncludeName)
-            .WithMemberOptions(SymbolDisplayFormat.TestFormat.MemberOptions & ~SymbolDisplayMemberOptions.IncludeType);
+            .WithMemberOptions(SymbolDisplayFormat.TestFormat.MemberOptions & ~SymbolDisplayMemberOptions.IncludeType)
+            .WithMiscellaneousOptions(SymbolDisplayFormat.TestFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
 
         internal static void TestCallSites(string source, Symbols symbolsToCheck, ImmutableArray<DiagnosticDescription> expectedDiagnostics)
         {
@@ -43,10 +44,11 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
 
             //Verify symbols
             var results = string.Join("\n", model.SyntaxTree.GetRoot().DescendantNodesAndSelf().Where(node =>
-                    (node is InvocationExpressionSyntax && symbolsToCheck.HasFlag(Symbols.Methods))
+                    (node is InvocationExpressionSyntax invocation && symbolsToCheck.HasFlag(Symbols.Methods))
                     || (node is ObjectCreationExpressionSyntax && symbolsToCheck.HasFlag(Symbols.ObjectCreation))
                 )
                 .Select(node => model.GetSymbolInfo(node).Symbol)
+                .Where(symbol => symbol != null)
                 .Select(symbol => symbol.ToDisplayString(TestCallSiteDisplayStringFormat))
                 .ToArray()
             );
@@ -71,7 +73,7 @@ class P
 {
     static void M() 
     {
-        F1<_>(null); //-P.F1<_>(_)
+        F1<_>(1); //-P.F1<int>(int)
     }
 
     static void F1<T>(T p) {}
@@ -79,10 +81,13 @@ class P
 
 class _ {}
 """,
-                Symbols.Methods
+                Symbols.Methods,
+                ImmutableArray.Create(
+                    // (11,7): warning CS9214: Types and aliases should not be named '_'.
+                    // class _ {}
+                    Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(11, 7)
+                )
             );
-
-            //TODO: Warning _ usage
         }
 
         [Fact]
@@ -99,32 +104,35 @@ class P
     static void M() 
     {
         A temp1 = new A();
-        F<_>(temp1);
-        P.F<_>(temp1);
-        global::X.P.F<_>(temp1);
+        F<_>(temp1); //-X.P.F<X.P.A>(X.P.A)
+        P.F<_>(temp1); //-X.P.F<X.P.A>(X.P.A)
+        global::X.P.F<_>(temp1); //-X.P.F<X.P.A>(X.P.A)
 
         A? temp2 = null;
-        F<_?>(temp2);
+        F<_?>(temp2); //-X.P.F<X.P.A?>(X.P.A?)
 
         A<A?>? temp3 = null;
-        F<A<_?>?>(temp3);
+        F<A<_?>?>(temp3); //-X.P.F<X.P.A<X.P.A?>?>(X.P.A<X.P.A?>?)
 
         A.B<A> temp4 = new A.B<A>();
-        F<global::X.P.A.B<_>>(temp4);
-        F<A.B<_>>(temp4);
+        F<global::X.P.A.B<_>>(temp4); //-X.P.F<X.P.A.B<X.P.A>>(X.P.A.B<X.P.A>)
+        F<A.B<_>>(temp4); //-X.P.F<X.P.A.B<X.P.A>>(X.P.A.B<X.P.A>)
 
         A[] temp5 = new A[1];
-        F<_[]>(temp5);
+        F<_[]>(temp5); //-X.P.F<X.P.A[]>(X.P.A[])
 
         A<A>[] temp6 = new A<A>[1];
-        F<A<_>[]>(temp6);
+        F<A<_>[]>(temp6); //-X.P.F<X.P.A<X.P.A>[]>(X.P.A<X.P.A>[])
 
         var temp7 = (1, 1);
-        F<(_, _)>(temp7);
+        F<(_, _)>(temp7); //-X.P.F<(int, int)>((int, int))
 
-        (new B()).F<_>(1).F<_>(1).F<_>(1);
+        (new B())
+        .F<_>(1) //-X.P.B.F<int>(int)
+        .F<_>(1) //-X.P.B.F<int>(int)
+        .F<_>(1); //-X.P.B.F<int>(int)
 
-        A<_>.F<_>(temp1);
+        A<_>.F<_>(temp1); //-X.P.A<_>.F<X.P.A>(X.P.A)
     }
 
     static void F<T>(T p) {}
@@ -143,35 +151,33 @@ class P
     }
 }
 """,
-        Symbols.Methods
-    );
-
-            //TODO: Error _ not in invocation or object creation
-            //TODO: Signatures
+                Symbols.Methods,
+                ImmutableArray.Create(
+                    // (39,11): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                    //         A<_>.F<_>(temp1);
+                    Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(39, 11)
+                )
+            );
         }
 
         [Fact]
         public void PartialMethodTypeInference_Simple()
         {
             TestCallSites("""
+using System;
+
 public class P
 {
-    public void M2() 
+    public void M() 
     {
-        // Inferred: [T1 = int, T2 = string]
-        F1<_, string>(1); 
-        // Inferred: [T1 = int, T2 = string]
-        F2<_,_>(1,""); 
-        // Inferred: [T1 = int, T2 = string, T3 = string, T4 = string]
-        F3<int, _, string, _>(new G2<string, string>()); 
-        // Inferred: [T1 = int, T2 = int, T3 = string]
-        F4<_, _, string>(x => x + 1, y => y.ToString(),z => z.Length); 
-        // Inferred: [T1 = string]
-        F5<string>(1); 
-        // Inferred: [T1 = string]
-        F5<_>(1, ""); 
-        // Inferred: [T1 = string]
-        F5<_>(1, "", "");
+        F1<_, string>(1); //-P.F1<int, string>(int)
+        F2<_,_>(1,""); //-P.F2<int, string>(int, string)
+        F3<int, _, string, _>(new G2<string, string>()); //-P.F3<int, string, string, string>(P.G2<string, string>)
+        F4<_, _, string>(x => x + 1, y => y.ToString(),z => z.Length); //-P.F4<int, int, string>(System.Func<int, int>, System.Func<int, string>, System.Func<string, int>)
+                                                                       //-int.ToString()
+        F5<string>(1); //-P.F5<string>(int, params string[])
+        F5<_>(1, ""); //-P.F5<string>(int, params string[])
+        F5<_>(1, "", ""); //-P.F5<string>(int, params string[])
     }
     void F1<T1, T2>(T1 p1) {}
     void F2<T1, T2>(T1 p1, T2 p2) {}
@@ -184,8 +190,6 @@ public class P
 """,
         Symbols.Methods
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -194,19 +198,16 @@ public class P
             TestCallSites("""
 class P
 {
-    void M1() 
+    void M() 
     {
         B1<int> temp1 = null;
-        // Inferred: [ T1 = A1<int> ]
-        F6<A1<_>>(temp1); 
+        F6<A1<_>>(temp1); //-P.F6<P.A1<int>>(P.A1<int>)
 
         B2<int, string> temp2 = null;
-        // Inferred: [ T1 = A2<int, string> ]
-        F6<A2<_, string>>(temp2); 
+        F6<A2<_, string>>(temp2); //-P.F6<P.A2<int, string>>(P.A2<int, string>)
 
         C2<int, B> temp3 = null;
-        // Inferred: [ I2<int, A> ]
-        F6<I2<_, A>>(temp3); 
+        F6<I2<_, A>>(temp3); //-P.F6<P.I2<int, P.A>>(P.I2<int, P.A>)
     }   
 
     void F6<T1>(T1 p1) {}
@@ -223,8 +224,6 @@ class P
 """,
         Symbols.Methods
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -236,24 +235,38 @@ class P {
     {
         dynamic temp4 = "";
 
-        // Inferred: [T1 = int] Error: T1 = string & int
-        F7<string, _>("", temp4, 1);
+        // Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        temp4.M<_>();
+
+        // Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        F7<string, _>("", temp4, 1); //-P.F7<T1, T2>(T1, T2, T1)
         
-        // Inferred: [T1 = int] Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
-        F7<_, string>(1, temp4, 1); 
+        // Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        F7<_, string>(1, temp4, 1); //-P.F7<T1, T2>(T1, T2, T1)
         
-        // Inferred: [T1 = int] Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        // Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
         temp4.F7<string, _>(temp4);  
     }
 
     void F7<T1, T2>(T1 p1, T2 p2, T1 p3) {}
 }
 """,
-        Symbols.Methods
+        Symbols.Methods,
+        ImmutableArray.Create(
+                // (7,9): warning CS9212: Type hints will not be considered in type inference of dynamic call.
+                //         temp4.M<_>();
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, "temp4.M<_>()").WithLocation(7, 9),
+                // (10,9): warning CS9212: Type hints will not be considered in type inference of dynamic call.
+                //         F7<string, _>("", temp4, 1);
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, @"F7<string, _>("""", temp4, 1)").WithLocation(10, 9),
+                // (13,9): warning CS9212: Type hints will not be considered in type inference of dynamic call.
+                //         F7<_, string>(1, temp4, 1); 
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, "F7<_, string>(1, temp4, 1)").WithLocation(13, 9),
+                // (16,9): warning CS9212: Type hints will not be considered in type inference of dynamic call.
+                //         temp4.F7<string, _>(temp4);  
+                Diagnostic(ErrorCode.WRN_TypeHintsInDynamicCall, "temp4.F7<string, _>(temp4)").WithLocation(16, 9)
+        )
     );
-
-            //TODO: Warnings and errors
-            //TODO: Signatures
         }
 
         [Fact]
@@ -271,11 +284,19 @@ class P {
     void F1<T1, T2>(T1 p1) {}
 }
 """,
-        Symbols.Methods
+        Symbols.Methods,
+        ImmutableArray.Create(
+            // (4,9): error CS0411: The type arguments for method 'P.F1<T1, T2>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+            //         F1<_,_>(""); // Error: Can't infer T2
+            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>(T1)").WithLocation(4, 9),
+            // (5,25): error CS1503: Argument 1: cannot convert from 'string' to 'int'
+            //         F1<int, string>(""); // Error: int != string
+            Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 25),
+            // (6,9): error CS0411: The type arguments for method 'P.F1<T1, T2>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+            //         F1<byte,_>(257); // Error: Can't infer T2
+            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>(T1)").WithLocation(6, 9)
+        )
     );
-
-            //TODO: Warnings and errors
-            //TODO: Signatures
         }
 
         [Fact]
