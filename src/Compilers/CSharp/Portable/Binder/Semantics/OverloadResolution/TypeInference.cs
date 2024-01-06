@@ -289,7 +289,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 {
                     targets.Add(TypeWithAnnotations.Create(typeParameters[i]));
                     sources.Add(new BoundTypeExpression(constraints[j].Type.GetNonNullSyntaxNode(), null, constraints[j]));
-                    bounds.Add(ExactOrShapeOrBoundsKind.UpperBound);
+                    bounds.Add(ExactOrShapeOrBoundsKind.LowerBound);
                 }
             }
         }

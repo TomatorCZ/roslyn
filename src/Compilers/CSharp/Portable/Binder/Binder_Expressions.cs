@@ -287,6 +287,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             BoundExpression result;
             switch (expression)
             {
+                case BoundUnconvertedInferredClassCreationExpression expr:
+                    result = BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.Syntax.Type, (NamedTypeSymbol)expr.InferredType, expr.Arguments, diagnostics, expr.Syntax.Initializer, expr.InitializerTypeOpt);
+                    expr.Arguments.Free();
+                    break;
                 case BoundUnconvertedSwitchExpression expr:
                     {
                         var commonType = expr.Type;
@@ -4683,9 +4687,25 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             BoundExpression bindObjectCreationExpression(ObjectCreationExpressionSyntax node, BindingDiagnosticBag diagnostics)
             {
-                var typeWithAnnotations = BindType(node.Type, diagnostics);
+                var tempDiagnostics = BindingDiagnosticBag.GetInstance(diagnostics.AccumulatesDiagnostics, diagnostics.AccumulatesDependencies);
+                var typeWithAnnotations = BindType(node.Type, tempDiagnostics, allowInferredType: node.IsFeatureEnabled(MessageID.IDS_FeaturePartialConstructorTypeInference));
                 var type = typeWithAnnotations.Type;
                 var originalType = type;
+
+                if (type.IsInferred())
+                {
+                    if (type.TypeKind != TypeKindInternal.InferredType && type.TypeKind is TypeKind.Struct or TypeKind.Class or TypeKind.Enum or TypeKind.Error)
+                    {
+                        diagnostics.AddRangeAndFree(tempDiagnostics);
+                    }
+                    else
+                    {
+                        tempDiagnostics.Clear();
+                        typeWithAnnotations = BindType(node.Type, diagnostics);
+                        type = typeWithAnnotations.Type;
+                        originalType = type;
+                    }
+                }
 
                 if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
                 {
@@ -5012,12 +5032,16 @@ namespace Microsoft.CodeAnalysis.CSharp
                     diagnostics.Add(ErrorCode.ERR_NewWithTupleTypeSyntax, node.Type.GetLocation());
                     return MakeBadExpressionForObjectCreation(node, type, analyzedArguments, diagnostics);
                 }
-
-                return BindClassCreationExpression(node, typeName, node.Type, type, analyzedArguments, diagnostics, node.Initializer, initializerType);
+                else
+                {
+                    return type.IsInferred() ? new BoundUnconvertedInferredClassCreationExpression(node, type, typeName, initializerType, this, analyzedArguments)
+                        : BindClassCreationExpression(node, typeName, node.Type, type, analyzedArguments, diagnostics, node.Initializer, initializerType);
+                }
             }
             finally
             {
-                analyzedArguments.Free();
+                if (!type.IsInferred())
+                    analyzedArguments.Free();
             }
         }
 
@@ -6078,6 +6102,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             TypeSymbol initializerTypeOpt = null,
             bool wasTargetTyped = false)
         {
+            var originalTypeArgs = type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics;
             BoundExpression result = null;
             bool hasErrors = type.IsErrorType();
             if (type.IsAbstract)
@@ -6144,6 +6169,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 !type.IsAbstract)
             {
                 var method = memberResolutionResult.Member;
+                type = method.ContainingType;
 
                 bool hasError = false;
 
@@ -6186,6 +6212,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     constantValueOpt,
                     boundInitializerOpt,
                     wasTargetTyped,
+                    originalTypeArgs,
                     type,
                     hasError);
 
@@ -6193,6 +6220,9 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 return creation;
             }
+
+            if (type.IsInferred())
+                type = type.OriginalDefinition;
 
             LookupResultKind resultKind;
 
@@ -6566,6 +6596,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                         memberGroup: candidateConstructors, typeContainingConstructors, delegateTypeBeingInvoked: null);
                 }
             }
+            
+            candidateConstructors = result.Results.SelectAsArray(x => x.Member);
 
             result.Free();
             return succeededConsideringAccessibility;

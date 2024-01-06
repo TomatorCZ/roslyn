@@ -90,6 +90,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case BoundKind.DefaultLiteral:
                 case BoundKind.UnconvertedInterpolatedString:
                 case BoundKind.UnconvertedCollectionExpression:
+                case BoundKind.UnconvertedInferredClassCreationExpression:
                     return true;
                 case BoundKind.StackAllocArrayCreation:
                     // A BoundStackAllocArrayCreation is given a null type when it is in a
