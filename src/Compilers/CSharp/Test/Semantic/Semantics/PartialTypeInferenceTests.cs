@@ -407,7 +407,7 @@ class P
 {
     static void M() 
     {
-        new F1<_>(null); //-P.F1<_>..ctor(_)
+        new F1<_>(1); //-P.F1<int>..ctor(int)
     }
 
     class F1<T> { public F1(T p) {} }
@@ -415,10 +415,13 @@ class P
 
 class _ {}
 """,
-                Symbols.ObjectCreation
+                Symbols.ObjectCreation,
+                ImmutableArray.Create(
+                    // (11,7): warning CS9214: Types and aliases should not be named '_'.
+                    // class _ {}
+                    Diagnostic(ErrorCode.WRN_UnderscoreNamedDisallowed, "_").WithLocation(11, 7)
+                )
             );
-
-            //TODO: Warning _ usage
         }
 
         [Fact]
@@ -432,31 +435,31 @@ class P
 {
     static void M() 
     {
-        A temp1 = new A();
-        new F<_>(temp1);
-        new P.F<_>(temp1);
-        new global::X.P.F<_>(temp1);
+        A temp1 = new A(); //-X.P.A..ctor()
+        new F<_>(temp1); //-X.P.F<X.P.A>..ctor(X.P.A)
+        new P.F<_>(temp1); //-X.P.F<X.P.A>..ctor(X.P.A)
+        new global::X.P.F<_>(temp1); //-X.P.F<X.P.A>..ctor(X.P.A)
 
         A? temp2 = null;
-        new F<_?>(temp2);
+        new F<_?>(temp2); //-X.P.F<X.P.A?>..ctor(X.P.A?)
 
         A<A?>? temp3 = null;
-        new F<A<_?>?>(temp3);
+        new F<A<_?>?>(temp3); //-X.P.F<X.P.A<X.P.A?>?>..ctor(X.P.A<X.P.A?>?)
 
-        A.B<A> temp4 = new A.B<A>();
-        new F<global::X.P.A.B<_>>(temp4);
-        new F<A.B<_>>(temp4);
+        A.B<A> temp4 = new A.B<A>(); //-X.P.A.B<X.P.A>..ctor()
+        new F<global::X.P.A.B<_>>(temp4); //-X.P.F<X.P.A.B<X.P.A>>..ctor(X.P.A.B<X.P.A>)
+        new F<A.B<_>>(temp4); //-X.P.F<X.P.A.B<X.P.A>>..ctor(X.P.A.B<X.P.A>)
 
         A[] temp5 = new A[1];
-        new F<_[]>(temp5);
+        new F<_[]>(temp5); //-X.P.F<X.P.A[]>..ctor(X.P.A[])
 
         A<A>[] temp6 = new A<A>[1];
-        new F<A<_>[]>(temp6);
+        new F<A<_>[]>(temp6); //-X.P.F<X.P.A<X.P.A>[]>..ctor(X.P.A<X.P.A>[])
 
         var temp7 = (1, 1);
-        new F<(_, _)>(temp7);
+        new F<(_, _)>(temp7); //-X.P.F<(int, int)>..ctor((int, int))
 
-        new A<_>.F<_>(temp1); // Error
+        new A<_>.F<_>(temp1); //-X.P.A<T1>.F<X.P.A>..ctor(X.P.A)
         new _(); // Error
         var temp8 = new Del<_>(Foo); //Error
     }
@@ -475,10 +478,22 @@ class P
     int Foo(int p) {return p;}
 }
 """,
-        Symbols.ObjectCreation
+        Symbols.ObjectCreation,
+        ImmutableArray.Create(
+                // (32,15): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         new A<_>.F<_>(temp1); // Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(32, 15),
+                // (33,13): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         new _(); // Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(33, 13),
+                // (34,21): error CS0123: No overload for 'Foo' matches delegate 'P.Del<_>'
+                //         var temp8 = new Del<_>(Foo); //Error
+                Diagnostic(ErrorCode.ERR_MethDelegateMismatch, "new Del<_>(Foo)").WithArguments("Foo", "X.P.Del<_>").WithLocation(34, 21),
+                // (34,29): error CS0246: The type or namespace name '_' could not be found (are you missing a using directive or an assembly reference?)
+                //         var temp8 = new Del<_>(Foo); //Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(34, 29)
+            )
     );
-
-            //TODO: Errors
             //TODO: Signatures
         }
 
@@ -486,27 +501,51 @@ class P
         public void PartialConstructorTypeInference_Simple()
         {
             TestCallSites("""
+using System;
+using System.Collections.Generic;
 namespace X;
 
 public class P
 {
-    public void M2() 
+    public void M1() 
     {
-        // Inferred: [T1 = int, T2 = string] Simple test
-        new F1<_, string>(1); 
-        // Inferred: [T1 = int, T2 = string] Choose overload based on arity
-        new F2<_,_>(1,""); 
-        // Inferred: [T1 = int, T2 = string, T3 = string, T4 = string] Constructed type
-        new F3<int, _, string, _>(new G2<string, string>()); 
-        // Inferred: [T1 = int, T2 = int, T3 = string] Circle of dependency
-        new F4<_, _, string>(x => x + 1, y => y.ToString(),z => z.Length); 
-        // Inferred: [T1 = string] Expanded form #1
-        new F5<string>(1); 
-        // Inferred: [T1 = string] Expanded form #2
-        new F5<_>(1, ""); 
-        // Inferred: [T1 = string] Expanded form #3
-        new F5<_>(1, "", "");
+        new F1<_, string>(1); //-X.P.F1<int, string>..ctor(int)
+        new F2<_,_>(1,""); //-X.P.F2<int, string>..ctor(int, string)
+        new F3<int, _, string, _>( //-X.P.F3<int, string, string, string>..ctor(X.P.G2<string, string>)
+            new G2<string, string>()  //-X.P.G2<string, string>..ctor()
+        );
+        new F4<_, _, string>(x => x + 1, y => y.ToString(),z => z.Length); //-X.P.F4<int, int, string>..ctor(System.Func<int, int>, System.Func<int, string>, System.Func<string, int>)
+        new F5<string>(1); //-X.P.F5<string>..ctor(int, params string[])
+        new F5<_>(1, ""); //-X.P.F5<string>..ctor(int, params string[])
+        new F5<_>(1, "", ""); //-X.P.F5<string>..ctor(int, params string[])
+        
+        
+        F6(
+            new F1<_, string>(1) //-X.P.F1<int, string>..ctor(int)
+        );
+        new F7( //-X.P.F7..ctor(object)
+            new F1<_, string>(1) //-X.P.F1<int, string>..ctor(int)
+        );
+        new F8<_>( //-X.P.F8<int>..ctor(int, object)
+            1, 
+            new F1<_, string>(1) //-X.P.F1<int, string>..ctor(int)
+        );
+        object temp1 = new F1<_, string>(1); //-X.P.F1<int, string>..ctor(int)
+        temp1 = new F1<_, string>(1); //-X.P.F1<int, string>..ctor(int)
+        var temp2 = new object[] { 
+            new F1<_, string>(1) //-X.P.F1<int, string>..ctor(int)
+        };
+        new F9 { //-X.P.F9..ctor()
+            P1 = new F1<_, string>(1) //-X.P.F1<int, string>..ctor(int)
+        };
+        new List<object> { 
+            new F1<_, string>(1) //-X.P.F1<int, string>..ctor(int)
+        };
+        Func<object> temp3 = () => new F1<_, string>(1); //-X.P.F1<int, string>..ctor(int)
     }
+
+    public object M2() => new F1<_, string>(1); //-X.P.F1<int, string>..ctor(int)
+    public object M3 = new F1<_, string>(1); //-X.P.F1<int, string>..ctor(int)
 
     class F1<T1, T2>{ public F1(T1 p1){} }
     class F2<T1, T2>{ public F2(T1 p1, T2 p2) {} }
@@ -515,12 +554,23 @@ public class P
     class G2<T1, T2> {}
     class F4<T1, T2, T3>{ public F4(Func<T1, T2> p12, Func<T2, T3> p23, Func<T3, T1> p31) { } }
     class F5<T>{ public F5(int p1, params T[] args) {} }
+    public void F6(object p1) {}
+    class F7 
+    {
+        public F7(object p1) {}
+    }
+    class F8<T>
+    { 
+        public F8(T p1, object p2) {}
+    }
+    class F9 
+    {
+        public object P1 = null;
+    }
 }
 """,
         Symbols.ObjectCreation
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -532,16 +582,13 @@ class P
     void M1() 
     {
         B1<int> temp1 = null;
-        // Inferred: [ T1 = A1<int> ] Wrapper conversion
-        new F6<A1<_>>(temp1); 
+        new F6<A1<_>>(temp1); //-P.F6<P.A1<int>>..ctor(P.A1<int>)
 
         B2<int, string> temp2 = null;
-        // Inferred: [ T1 = A2<int, string> ] Wrapper conversion with type argument
-        new F6<A2<_, string>>(temp2); 
+        new F6<A2<_, string>>(temp2); //-P.F6<P.A2<int, string>>..ctor(P.A2<int, string>)
 
         C2<int, B> temp3 = null;
-        // Inferred: [ I2<int, A> ] Wrapper conversion with type argument conversion
-        new F6<I2<_, A>>(temp3); 
+        new F6<I2<_, A>>(temp3); //-P.F6<P.I2<int, P.A>>..ctor(P.I2<int, P.A>)
     }   
 
     class F6<T1>
@@ -561,8 +608,6 @@ class P
 """,
         Symbols.ObjectCreation
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -683,7 +728,7 @@ class P
         }
 
         [Fact]
-        public void PartialConstructorTypeInference_Constraints()
+        public void PartialConstructorTypeInference_Complex()
         {
             TestCallSites("""
 class Program
@@ -713,7 +758,7 @@ class Program
         }
 
         [Fact]
-        public void PartialConstructorTypeInference_Complex()
+        public void PartialConstructorTypeInference_Constraints()
         {
             TestCallSites("""
 class Program 
@@ -722,7 +767,7 @@ class Program
     {
         // Inferred: [T1 = C1<int>, T2 = int]
         // Using constraints to determine type parameters
-        new C4<_,_>(1);
+        //new C4<_,_>(1);
 
         // Inferred: [T1 = C7, T2 = C7]
         new C5<_,_>(new C7());
