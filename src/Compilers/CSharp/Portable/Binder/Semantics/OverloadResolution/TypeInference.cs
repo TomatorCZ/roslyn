@@ -289,7 +289,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 {
                     targets.Add(TypeWithAnnotations.Create(typeParameters[i]));
                     sources.Add(new BoundTypeExpression(constraints[j].Type.GetNonNullSyntaxNode(), null, constraints[j]));
-                    bounds.Add(ExactOrShapeOrBoundsKind.LowerBound);
+                    bounds.Add(ExactOrShapeOrBoundsKind.UpperBound);
                 }
             }
         }
@@ -2546,7 +2546,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private InferenceResult FixDependentParameters(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Shape) && (inferrer.AnyDependsOn(index, DependencyKind.Function) || inferrer.AnyDependsOn(index, DependencyKind.Bound)), ref useSiteInfo);
+            return FixParameters((inferrer, index) => !inferrer.DependsOnAny(index, DependencyKind.Shape) && (inferrer.AnyDependsOn(index, DependencyKind.Shape) || inferrer.AnyDependsOn(index, DependencyKind.Function) || inferrer.AnyDependsOn(index, DependencyKind.Bound)), ref useSiteInfo);
         }
 
         private InferenceResult FixParameters(

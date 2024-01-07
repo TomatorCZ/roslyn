@@ -3805,7 +3805,7 @@ outerDefault:
                         ref useSiteInfo,
                         GetInferredSymbols(contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics),
                         contatiningType.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics,
-                        useTypeParametersConstraints: false
+                        useTypeParametersConstraints: true
                         );
 
                     if (inferenceResult.Success)
