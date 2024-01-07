@@ -217,4 +217,40 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
     }
+
+    internal partial class BoundUnconvertedInferredClassCreationExpression
+    {
+        public override object Display
+        {
+            get
+            {
+                var arguments = this.Arguments.Arguments;
+                if (arguments.Count == 0)
+                {
+                    return $"new {this.InferredType}()";
+                }
+
+                var pooledBuilder = PooledStringBuilder.GetInstance();
+                var builder = pooledBuilder.Builder;
+                var argumentDisplays = new object[arguments.Count];
+
+                builder.Append("new ");
+                builder.Append(this.InferredType.OriginalDefinition);
+                builder.Append('(');
+                builder.Append("{0}");
+                argumentDisplays[0] = arguments[0].Display;
+
+                for (int i = 1; i < arguments.Count; i++)
+                {
+                    builder.Append($", {{{i.ToString()}}}");
+                    argumentDisplays[i] = arguments[i].Display;
+                }
+
+                builder.Append(')');
+
+                var format = pooledBuilder.ToStringAndFree();
+                return FormattableStringFactory.Create(format, argumentDisplays);
+            }
+        }
+    }
 }
