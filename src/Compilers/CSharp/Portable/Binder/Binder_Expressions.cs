@@ -6122,6 +6122,12 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (analyzedArguments.HasDynamicArgument)
             {
+                if (type.IsInferred())
+                {
+                    type = type.OriginalDefinition;
+                    hasErrors = true;
+                    Error(diagnostics, ErrorCode.ERR_TypeHintsInDynamicObjectCreation, node);
+                }
                 OverloadResolutionResult<MethodSymbol> overloadResolutionResult = OverloadResolutionResult<MethodSymbol>.GetInstance();
                 this.OverloadResolution.ObjectCreationOverloadResolution(GetAccessibleConstructorsForOverloadResolution(type, ref useSiteInfo), analyzedArguments, overloadResolutionResult, ref useSiteInfo);
                 diagnostics.Add(node, useSiteInfo);
@@ -6596,7 +6602,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         memberGroup: candidateConstructors, typeContainingConstructors, delegateTypeBeingInvoked: null);
                 }
             }
-            
+
             candidateConstructors = result.Results.SelectAsArray(x => x.Member);
 
             result.Free();

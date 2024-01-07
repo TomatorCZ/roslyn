@@ -838,11 +838,15 @@ class P {
     class F7<T1, T2>{ public F7(T1 p1, T2 p2, T1 p3) {} }
 }
 """,
-        Symbols.ObjectCreation
-    );
-
-            //TODO: Warning
-            //TODO: Signatures
+        Symbols.ObjectCreation,
+        ImmutableArray.Create(
+                // (7,9): error CS9215: Can't use inferred type arguments in object creation containing dynamic arguments.
+                //         new F7<string, _>("", temp4, 1);
+                Diagnostic(ErrorCode.ERR_TypeHintsInDynamicObjectCreation, @"new F7<string, _>("""", temp4, 1)").WithLocation(7, 9),
+                // (10,9): error CS9215: Can't use inferred type arguments in object creation containing dynamic arguments.
+                //         new F7<_, string>(1, temp4, 1);
+                Diagnostic(ErrorCode.ERR_TypeHintsInDynamicObjectCreation, "new F7<_, string>(1, temp4, 1)").WithLocation(10, 9))
+        );
         }
 
         [Fact]
