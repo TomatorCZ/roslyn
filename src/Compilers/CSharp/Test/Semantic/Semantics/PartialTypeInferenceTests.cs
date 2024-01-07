@@ -765,12 +765,11 @@ class Program
 {
     public void M1() 
     {
-        // Inferred: [T1 = C1<int>, T2 = int]
-        // Using constraints to determine type parameters
-        //new C4<_,_>(1);
+        new C4<_,_>(1); //-C4<C1<int>, int>..ctor(int)
 
-        // Inferred: [T1 = C7, T2 = C7]
-        new C5<_,_>(new C7());
+        new C5<_,_>( //-C5<C7, C7>..ctor(C7)
+            new C7() //-C7..ctor()
+        ); 
     }
 }
 
@@ -792,8 +791,6 @@ public class C7 : C6<C7> {}
 """,
         Symbols.ObjectCreation
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -834,7 +831,7 @@ class P {
         // Inferred: [T1 = int] Error: T1 = string & int
         new F7<string, _>("", temp4, 1);
                     
-        // Inferred: [T1 = int] Warning: Inferred type argument is not supported by runtime (type hints will not be used at all)
+        // Inferred: [T1 = int] Error: Inferred type argument is not supported by runtime (type hints will not be used at all)
         new F7<_, string>(1, temp4, 1);
     }
             
