@@ -2952,7 +2952,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             if (arg != null)
             {
-                hasErrors |= arg.HasErrors || ((object)arg.Type != null && arg.Type.IsErrorType());
+                hasErrors |= (arg.HasErrors || ((object)arg.Type != null && arg.Type.IsErrorType())) && arg.Kind != BoundKind.UnconvertedInferredClassCreationExpression;
             }
 
             if (hasErrors)

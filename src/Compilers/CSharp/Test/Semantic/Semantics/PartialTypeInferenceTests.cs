@@ -614,26 +614,31 @@ class P
         public void PartialConstructorTypeInference_Target()
         {
             TestCallSites("""
+using System;
 using System.Collections.Generic;
 
 class P 
 {
     void Test_VariableDeclaration() 
     {
-        // Inferred: [T = int]
-        C1<int> temp1 = new C2<_>();
+        C1<int> temp1 = new C2<_>(); //-P.C2<int>..ctor()
     }
     
     void Test_ClassObjectCreation()
     {
-        // Inferred: [T = int]
-        new C4(new C2<_>());
+        new C4( //-P.C4..ctor(P.C1<int>)
+            new C2<_>() //-P.C2<int>..ctor()
+        ); 
 
-        // Inferred: [T = int]
-        new C5<_>(new C5<_>(1));
+        new C5<_>( //-P.C5<P.C5<int>>..ctor(P.C5<int>)
+            new C5<_>(1) //-P.C5<int>..ctor(int)
+        );
 
-        // Inferred: [T = int]  
-        new C3<_>(new C2<_>(), 1);
+       
+        new C3<_>( //-P.C3<int>..ctor(P.C1<int>, int)
+            new C2<_>(),  // Error: Can't be inferred  
+            1
+        );
     }
 
     class C3<T>
@@ -647,14 +652,11 @@ class P
 
     void Test_InvocationExpression()
     {
-        // Inferred: [T = int]
-        F2(new C2<_>());
+        F2(new C2<_>()); //-P.C2<int>..ctor()
 
-        // Inferred: [T = int]
-        F3(new C5<_>(1));
+        F3(new C5<_>(1)); //-P.C5<int>..ctor(int)
 
-        // Inferred: [T = int]
-        F1(new C2<_>(), 1);
+        F1(new C2<_>(), 1); // Error: Can't be inferred 
     }
 
     class C5<T> : C1<T>
@@ -668,17 +670,21 @@ class P
 
     void Test_ArrayInitializer()
     {
-        // Inferred: [T = int]
-        var temp1 = new C1<int>[] { new C2<_>() };
+        var temp1 = new C1<int>[] { 
+            new C2<_>() //-P.C2<int>..ctor()
+        };
 
-        // Inferred: [T = int]
-        var temp2 = new [] { new C1<int>(), new C2<_>() };
+        var temp2 = new [] { 
+            new C1<int>(), //-P.C1<int>..ctor()
+            new C2<_>() //Error: Can't be inferred
+            };
     }
 
     void Test_ObjectInitializer()
     {
-        // Inferred: [T = int]
-        new M4 { P1 = new C2<_>()};
+        new M4 { //-P.M4..ctor()
+            P1 = new C2<_>() //-P.C2<int>..ctor()
+        };
     }
 
     class M4 
@@ -688,43 +694,48 @@ class P
 
     void Test_CollectionInitializer()
     {
-        // Inferred: [T = int]
-        new List<C1<int>> { new C2<_>() };
+        new List<C1<int>> { //-System.Collections.Generic.List<P.C1<int>>..ctor()
+            new C2<_>() //-P.C2<int>..ctor()
+        };
     }
 
     void Test_Lambda()
     {
-        // Inferred: [T = int]
-        Func<C1<int>> temp2 = () => new C2<_>();
+        Func<C1<int>> temp2 = () => new C2<_>(); //-P.C2<int>..ctor()
     }
-
+    
     void Test_Assignment() 
     {
-        // Inferred: [T = int]
         C1<int> temp3 = null;
-        temp3 = new C2<_>();
+        temp3 = new C2<_>(); //-P.C2<int>..ctor()
     }
     
     
     C1<int> Test_Return1() {
-        // Inferred: [T = int]
-        return new C2<_>();
+        return new C2<_>(); //-P.C2<int>..ctor()
     }
-
-    //Inferred: [T = int]
-    C1<int> Test_Return2() => new C2<_>();
-
-    // Inferred: [T = int]
-    C1<int> Test_FieldInitializer = new C2<_>();
+    
+    C1<int> Test_Return2() => new C2<_>(); //-P.C2<int>..ctor()
+    
+    C1<int> Test_FieldInitializer = new C2<_>(); //-P.C2<int>..ctor()
 
     class C1<T> {}
     class C2<T> : C1<T> {}
 }
 """,
-        Symbols.ObjectCreation
+        Symbols.ObjectCreation,
+        ImmutableArray.Create(
+                // (23,17): error CS0411: The type arguments for method 'P.C2<T>.C2()' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //             new C2<_>(),  // Error: Can't be inferred  
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "C2<_>").WithArguments("P.C2<T>.C2()").WithLocation(23, 17),
+                // (43,16): error CS0411: The type arguments for method 'P.C2<T>.C2()' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F1(new C2<_>(), 1); // Error: Can't be inferred 
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "C2<_>").WithArguments("P.C2<T>.C2()").WithLocation(43, 16),
+                // (63,17): error CS0411: The type arguments for method 'P.C2<T>.C2()' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //             new C2<_>() //Error: Can't be inferred
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "C2<_>").WithArguments("P.C2<T>.C2()").WithLocation(63, 17)
+            )
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -803,6 +814,7 @@ class P {
         new F1<_,_>(""); // Error: Can't infer T2
         new F1<int, string>(""); // Error: int != string
         new F1<byte,_>(257); // Error: Can't infer T2    
+        F2(new B()); //Error
         F2(new F1<_,_>("")); // Error
         F3(new F1<_,_>(1)); // Error
         new F1<_,_>(new F1<_,_>(1)); // Error
@@ -814,24 +826,27 @@ class P {
 """,
         Symbols.ObjectCreation,
         ImmutableArray.Create(
-            // (4,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-            //         new F1<_,_>(""); // Error: Can't infer T2
-            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(4, 13),
-            // (5,29): error CS1503: Argument 1: cannot convert from 'string' to 'int'
-            //         new F1<int, string>(""); // Error: int != string
-            Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 29),
-            // (6,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-            //         new F1<byte,_>(257); // Error: Can't infer T2    
-            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(6, 13),
-            // (7,9): error CS0411: The type arguments for method 'P.F2<T1>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-            //         F2(new F1<_,_>("")); // Error
-            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F2").WithArguments("P.F2<T1>(T1)").WithLocation(7, 9),
-            // (8,9): error CS0411: The type arguments for method 'P.F3<T1, T2>(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-            //         F3(new F1<_,_>(1)); // Error
-            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F3").WithArguments("P.F3<T1, T2>(T1)").WithLocation(8, 9),
-            // (9,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
-            //         new F1<_,_>(new F1<_,_>(1)); // Error
-            Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(9, 13)
+                // (4,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,_>(""); // Error: Can't infer T2
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(4, 13),
+                // (5,29): error CS1503: Argument 1: cannot convert from 'string' to 'int'
+                //         new F1<int, string>(""); // Error: int != string
+                Diagnostic(ErrorCode.ERR_BadArgType, @"""""").WithArguments("1", "string", "int").WithLocation(5, 29),
+                // (6,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<byte,_>(257); // Error: Can't infer T2    
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<byte,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(6, 13),
+                // (7,16): error CS0246: The type or namespace name 'B' could not be found (are you missing a using directive or an assembly reference?)
+                //         F2(new B()); //Error
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "B").WithArguments("B").WithLocation(7, 16),
+                // (8,16): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F2(new F1<_,_>("")); // Error
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(8, 16),
+                // (9,16): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         F3(new F1<_,_>(1)); // Error
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(9, 16),
+                // (10,13): error CS0411: The type arguments for method 'P.F1<T1, T2>.F1(T1)' cannot be inferred from the usage. Try specifying the type arguments explicitly.
+                //         new F1<_,_>(new F1<_,_>(1)); // Error
+                Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F1<_,_>").WithArguments("P.F1<T1, T2>.F1(T1)").WithLocation(10, 13)
         )
     );
         }

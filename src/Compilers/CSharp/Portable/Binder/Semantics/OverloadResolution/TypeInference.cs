@@ -227,16 +227,21 @@ namespace Microsoft.CodeAnalysis.CSharp
             ArrayBuilder<ExactOrShapeOrBoundsKind> bounds,
             ImmutableArray<TypeWithAnnotations> parameterTypes,
             ImmutableArray<BoundExpression> arguments,
-            ImmutableArray<RefKind> formalParameterRefKinds)
+            ImmutableArray<RefKind> formalParameterRefKinds,
+            HashSet<TypeParameterSymbol> typeParameters)
         {
-            if (parameterTypes.IsDefault || arguments.IsDefault)
+            if (parameterTypes.IsDefault || arguments.IsDefault || parameterTypes.Length != arguments.Length )
                 return;
 
-            int min = Math.Min(parameterTypes.Length, arguments.Length);
-            targets.AddRange(parameterTypes, min);
-            sources.AddRange(arguments, min);
-            for (int i = 0; i < min; i++)
+            for (int i = 0; i < parameterTypes.Length; i++)
             {
+                targets.Add(parameterTypes[i]);
+                //Don't forget to add diagnostics.
+                if (arguments[i] is BoundUnconvertedInferredClassCreationExpression expr && parameterTypes[i].Type.ContainsTypeParameters(typeParameters))
+                    sources.Add(expr.BoundWithoutTargetTypeExpression);
+                else
+                    sources.Add(arguments[i]);
+
                 bounds.Add(((!formalParameterRefKinds.IsDefault && formalParameterRefKinds[i].IsManagedReference()) || arguments[i].Type.IsPointerType())
                     ? ExactOrShapeOrBoundsKind.Exact
                     : ExactOrShapeOrBoundsKind.LowerBound);
@@ -278,12 +283,13 @@ namespace Microsoft.CodeAnalysis.CSharp
             ArrayBuilder<TypeWithAnnotations> targets,
             ArrayBuilder<BoundExpression> sources,
             ArrayBuilder<ExactOrShapeOrBoundsKind> bounds,
-            ImmutableArray<TypeParameterSymbol> typeParameters
+            ImmutableArray<TypeParameterSymbol> typeParameters,
+            ImmutableArray<ImmutableArray<TypeWithAnnotations>> typeParametersConstraints
         )
         {
             for (int i = 0; i < typeParameters.Length; i++)
             {
-                var constraints = typeParameters[i].ConstraintTypesNoUseSiteDiagnostics;
+                var constraints = typeParametersConstraints[i];
                 for (int j = 0; j < constraints.Length; j++)
                 {
                     targets.Add(TypeWithAnnotations.Create(typeParameters[i]));
@@ -305,7 +311,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<SourceInferredTypeSymbol> inferredTypeParameters = default,
             ImmutableArray<TypeWithAnnotations> typeArguments = default,
             (TypeWithAnnotations source, TypeWithAnnotations target, bool isRef) targetContraint = default,
-            bool useTypeParametersConstraints = false,
+            ImmutableArray<ImmutableArray<TypeWithAnnotations>> typeParametersConstraints = default,
             Extensions extensions = null
             )
         {
@@ -313,13 +319,13 @@ namespace Microsoft.CodeAnalysis.CSharp
             var sources = ArrayBuilder<BoundExpression>.GetInstance();
             var boundKinds = ArrayBuilder<ExactOrShapeOrBoundsKind>.GetInstance();
 
-            AddArguments(targets, sources, boundKinds, formalParameterTypes, arguments, formalParameterRefKinds);
+            AddArguments(targets, sources, boundKinds, formalParameterTypes, arguments, formalParameterRefKinds, new HashSet<TypeParameterSymbol>(typeParameters));
             AddTypeArguments(targets, sources, boundKinds, typeParameters, typeArguments);
             if (!targetContraint.source.IsDefault && !targetContraint.target.IsDefault)
                 AddTarget(targets, sources, boundKinds, targetContraint.source, targetContraint.target, targetContraint.isRef);
 
-            if (useTypeParametersConstraints)
-                AddConstraints(targets, sources, boundKinds, typeParameters);
+            if (!typeParametersConstraints.IsDefault)
+                AddConstraints(targets, sources, boundKinds, typeParameters, typeParametersConstraints);
 
             return Infer(
                 binder,
@@ -353,7 +359,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             var sources = ArrayBuilder<BoundExpression>.GetInstance();
             var boundKinds = ArrayBuilder<ExactOrShapeOrBoundsKind>.GetInstance();
 
-            AddArguments(targets, sources, boundKinds, formalParameterTypes, arguments, formalParameterRefKinds);
+            AddArguments(targets, sources, boundKinds, formalParameterTypes, arguments, formalParameterRefKinds, new HashSet<TypeParameterSymbol>(typeParameters));
             AddTypeArguments(targets, sources, boundKinds, typeParameters, typeArguments);
 
             return Infer(
@@ -418,7 +424,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             AddArguments(targets, sources, boundKinds,
                 constructedFromMethod.GetParameterTypes().Take(1).AsImmutable(),
                 arguments.Take(1).AsImmutable(),
-                (!constructedFromMethod.ParameterRefKinds.IsDefault && constructedFromMethod.ParameterRefKinds.Length > 0) ? constructedFromMethod.ParameterRefKinds.Take(1).AsImmutable() : default
+                (!constructedFromMethod.ParameterRefKinds.IsDefault && constructedFromMethod.ParameterRefKinds.Length > 0) ? constructedFromMethod.ParameterRefKinds.Take(1).AsImmutable() : default,
+                new HashSet<TypeParameterSymbol>(method.TypeParameters)
             );
 
             //Add type hints

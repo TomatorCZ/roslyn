@@ -1075,6 +1075,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                             case BoundUnconvertedConditionalOperator { Type: { } naturalType } conditionalExpr:
                                 _ = ConvertConditionalExpression(conditionalExpr, naturalType, conversionIfTargetTyped: null, diagnostics);
                                 break;
+                            case BoundUnconvertedInferredClassCreationExpression { } expr:
+                                diagnostics.AddRange(expr.BoundWithoutTargetTypeDiagnostics);
+                                break;
                         }
                     }
                 }

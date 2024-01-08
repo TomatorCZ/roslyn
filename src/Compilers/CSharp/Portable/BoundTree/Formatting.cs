@@ -227,7 +227,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 var arguments = this.Arguments.Arguments;
                 if (arguments.Count == 0)
                 {
-                    return $"new {this.InferredType}()";
+                    return $"new {this.InferredType.OriginalDefinition}()";
                 }
 
                 var pooledBuilder = PooledStringBuilder.GetInstance();

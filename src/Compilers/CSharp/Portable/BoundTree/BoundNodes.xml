@@ -1853,6 +1853,8 @@
     <Field Name="InitializerTypeOpt" Type="TypeSymbol?" Null="allow"/>
     <Field Name="Binder" Type="Binder" Null="disallow"/>
     <Field Name="Arguments" Type="AnalyzedArguments" Null="disallow"/>
+    <Field Name="BoundWithoutTargetTypeExpression" Type="BoundExpression" Null="disallow"/>
+    <Field Name="BoundWithoutTargetTypeDiagnostics" Type="BindingDiagnosticBag" Null="disallow"/>
   </Node>
 
   <AbstractNode Name="BoundObjectCreationExpressionBase" Base="BoundExpression">
