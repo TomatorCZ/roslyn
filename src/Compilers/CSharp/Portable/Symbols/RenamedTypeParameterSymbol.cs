@@ -3,11 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
@@ -24,22 +20,22 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal override ImmutableArray<TypeWithAnnotations> GetConstraintTypes(ConsList<TypeParameterSymbol> inProgress)
         {
-            return _underlyingTypeParameter.GetConstraintTypes(inProgress);
+            throw new InvalidOperationException();
         }
 
         internal override TypeSymbol GetDeducedBaseType(ConsList<TypeParameterSymbol> inProgress)
         {
-            return _underlyingTypeParameter.GetDeducedBaseType(inProgress);
+            throw new InvalidOperationException();
         }
 
         internal override NamedTypeSymbol GetEffectiveBaseClass(ConsList<TypeParameterSymbol> inProgress)
         {
-            return _underlyingTypeParameter.GetEffectiveBaseClass(inProgress);
+            throw new InvalidOperationException();
         }
 
         internal override ImmutableArray<NamedTypeSymbol> GetInterfaces(ConsList<TypeParameterSymbol> inProgress)
         {
-            return _underlyingTypeParameter.GetInterfaces(inProgress);
+            throw new InvalidOperationException();
         }
     }
 }

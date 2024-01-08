@@ -69,5 +69,6 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         InlineArray, // A conversion from an inline array to Span/ReadOnlySpan
         InferredClassCreation, // a conversion from a inferred class creation to the exact type (without using target type)
+        InferredClassCreationWithTarget, // a conversion from a inferred class creation to the exact type (with using target type)
     }
 }

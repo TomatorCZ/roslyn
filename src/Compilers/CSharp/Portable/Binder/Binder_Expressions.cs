@@ -288,7 +288,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             switch (expression)
             {
                 case BoundUnconvertedInferredClassCreationExpression expr:
-                    result = BindClassCreationExpression(expr.Syntax, expr.TypeName, expr.Syntax.Type, (NamedTypeSymbol)expr.InferredType, expr.Arguments, diagnostics, expr.Syntax.Initializer, expr.InitializerTypeOpt);
+                    result = expr.BoundWithoutTargetTypeExpression;
+                    diagnostics.AddRangeAndFree(expr.BoundWithoutTargetTypeDiagnostics);
                     expr.Arguments.Free();
                     break;
                 case BoundUnconvertedSwitchExpression expr:
@@ -3812,7 +3813,12 @@ namespace Microsoft.CodeAnalysis.CSharp
                     BoundExpression boundExpression = boundInitExpr[boundInitExprIndex];
                     boundInitExprIndex++;
 
-                    BoundExpression convertedExpression = GenerateConversionForAssignment(elemType, boundExpression, diagnostics);
+                    BoundExpression convertedExpression;
+                    if (boundExpression.Kind == BoundKind.UnconvertedInferredClassCreationExpression && isInferred)
+                        convertedExpression = CreateConversion(boundExpression.Syntax, boundExpression, Conversion.InferredClassCreation, false, null, elemType, diagnostics);
+                    else
+                        convertedExpression = GenerateConversionForAssignment(elemType, boundExpression, diagnostics);
+
                     initializers.Add(convertedExpression);
                 }
             }
@@ -4706,6 +4712,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                         originalType = type;
                     }
                 }
+                else 
+                {
+                    diagnostics.AddRangeAndFree(tempDiagnostics);
+                }
 
                 if (typeWithAnnotations.NullableAnnotation.IsAnnotated() && !type.IsNullableType())
                 {
@@ -5034,8 +5044,17 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
                 else
                 {
-                    return type.IsInferred() ? new BoundUnconvertedInferredClassCreationExpression(node, type, typeName, initializerType, this, analyzedArguments)
-                        : BindClassCreationExpression(node, typeName, node.Type, type, analyzedArguments, diagnostics, node.Initializer, initializerType);
+                    var tempDiagnostics = BindingDiagnosticBag.GetInstance(diagnostics.AccumulatesDiagnostics, diagnostics.AccumulatesDependencies);
+                    var boundWithoutTarget = BindClassCreationExpression(node, typeName, node.Type, type, analyzedArguments, tempDiagnostics, node.Initializer, initializerType);
+                    if (type.IsInferred())
+                    {
+                        return new BoundUnconvertedInferredClassCreationExpression(node, type, typeName, initializerType, this, analyzedArguments, boundWithoutTarget, tempDiagnostics);
+                    }
+                    else
+                    {
+                        diagnostics.AddRangeAndFree(tempDiagnostics);
+                        return boundWithoutTarget;
+                    }
                 }
             }
             finally
@@ -6100,7 +6119,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics,
             InitializerExpressionSyntax initializerSyntaxOpt = null,
             TypeSymbol initializerTypeOpt = null,
-            bool wasTargetTyped = false)
+            bool wasTargetTyped = false,
+            TypeSymbol destinationType = default)
         {
             var originalTypeArgs = type.TypeArgumentsWithAnnotationsNoUseSiteDiagnostics;
             BoundExpression result = null;
@@ -6171,7 +6191,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     out MemberResolutionResult<MethodSymbol> memberResolutionResult,
                     out ImmutableArray<MethodSymbol> candidateConstructors,
                     allowProtectedConstructorsOfBaseType: false,
-                    suppressUnsupportedRequiredMembersError: false) &&
+                    suppressUnsupportedRequiredMembersError: false,
+                    destinationType: destinationType) &&
                 !type.IsAbstract)
             {
                 var method = memberResolutionResult.Member;
@@ -6228,7 +6249,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             if (type.IsInferred())
-                type = type.OriginalDefinition;
+                type = CreateErrorType(typeName);
 
             LookupResultKind resultKind;
 
@@ -6502,7 +6523,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             out MemberResolutionResult<MethodSymbol> memberResolutionResult,
             out ImmutableArray<MethodSymbol> candidateConstructors,
             bool allowProtectedConstructorsOfBaseType,
-            bool suppressUnsupportedRequiredMembersError) // Last to make named arguments more convenient.
+            bool suppressUnsupportedRequiredMembersError,
+            TypeSymbol destinationType = default) // Last to make named arguments more convenient.
         {
             // Get accessible constructors for performing overload resolution.
             ImmutableArray<MethodSymbol> allInstanceConstructors;
@@ -6520,7 +6542,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (candidateConstructors.Any())
             {
                 // We have at least one accessible candidate constructor, perform overload resolution with accessible candidateConstructors.
-                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo);
+                this.OverloadResolution.ObjectCreationOverloadResolution(candidateConstructors, analyzedArguments, result, ref useSiteInfo, destinationType);
 
                 if (result.Succeeded)
                 {
@@ -6535,7 +6557,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // We might have a best match constructor which is inaccessible.
                 // Try overload resolution with all instance constructors to generate correct diagnostics and semantic info for this case.
                 OverloadResolutionResult<MethodSymbol> inaccessibleResult = OverloadResolutionResult<MethodSymbol>.GetInstance();
-                this.OverloadResolution.ObjectCreationOverloadResolution(allInstanceConstructors, analyzedArguments, inaccessibleResult, ref useSiteInfo);
+                this.OverloadResolution.ObjectCreationOverloadResolution(allInstanceConstructors, analyzedArguments, inaccessibleResult, ref useSiteInfo, destinationType);
 
                 if (inaccessibleResult.Succeeded)
                 {

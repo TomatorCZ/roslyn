@@ -6219,36 +6219,24 @@ namespace Microsoft.CodeAnalysis.CSharp
 
     internal sealed partial class BoundUnconvertedInferredClassCreationExpression : BoundExpression
     {
-        public BoundUnconvertedInferredClassCreationExpression(SyntaxNode syntax, TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments, bool hasErrors)
-            : base(BoundKind.UnconvertedInferredClassCreationExpression, syntax, null, hasErrors)
+        public BoundUnconvertedInferredClassCreationExpression(SyntaxNode syntax, TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments, BoundExpression boundWithoutTargetTypedExpression, BindingDiagnosticBag boundWithoutTargetTypedDiagnostics, bool hasErrors = false)
+            : base(BoundKind.UnconvertedInferredClassCreationExpression, syntax, null, hasErrors || boundWithoutTargetTypedExpression.HasErrors())
         {
 
             RoslynDebug.Assert(inferredType is object, "Field 'inferredType' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(typeName is object, "Field 'typeName' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
             RoslynDebug.Assert(arguments is object, "Field 'arguments' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(boundWithoutTargetTypedExpression is object, "Field 'boundWithoutTargetTypedExpression' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
+            RoslynDebug.Assert(boundWithoutTargetTypedDiagnostics is object, "Field 'boundWithoutTargetTypedDiagnostics' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
 
             this.InferredType = inferredType;
             this.TypeName = typeName;
             this.InitializerTypeOpt = initializerTypeOpt;
             this.Binder = binder;
             this.Arguments = arguments;
-        }
-
-        public BoundUnconvertedInferredClassCreationExpression(SyntaxNode syntax, TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments)
-            : base(BoundKind.UnconvertedInferredClassCreationExpression, syntax, null)
-        {
-
-            RoslynDebug.Assert(inferredType is object, "Field 'inferredType' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
-            RoslynDebug.Assert(typeName is object, "Field 'typeName' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
-            RoslynDebug.Assert(binder is object, "Field 'binder' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
-            RoslynDebug.Assert(arguments is object, "Field 'arguments' cannot be null (make the type nullable in BoundNodes.xml to remove this check)");
-
-            this.InferredType = inferredType;
-            this.TypeName = typeName;
-            this.InitializerTypeOpt = initializerTypeOpt;
-            this.Binder = binder;
-            this.Arguments = arguments;
+            this.BoundWithoutTargetTypeExpression = boundWithoutTargetTypedExpression;
+            this.BoundWithoutTargetTypeDiagnostics = boundWithoutTargetTypedDiagnostics;
         }
 
         public new TypeSymbol? Type => base.Type;
@@ -6257,15 +6245,17 @@ namespace Microsoft.CodeAnalysis.CSharp
         public TypeSymbol? InitializerTypeOpt { get; }
         public Binder Binder { get; }
         public AnalyzedArguments Arguments { get; }
+        public BoundExpression BoundWithoutTargetTypeExpression { get; }
+        public BindingDiagnosticBag BoundWithoutTargetTypeDiagnostics { get; }
 
         [DebuggerStepThrough]
         public override BoundNode? Accept(BoundTreeVisitor visitor) => visitor.VisitUnconvertedInferredClassCreationExpression(this);
 
-        public BoundUnconvertedInferredClassCreationExpression Update(TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments)
+        public BoundUnconvertedInferredClassCreationExpression Update(TypeSymbol inferredType, string typeName, TypeSymbol? initializerTypeOpt, Binder binder, AnalyzedArguments arguments, BoundExpression boundWithoutTargetTypedExpression, BindingDiagnosticBag boundWithoutTargetTypedDiagnostics)
         {
-            if (!TypeSymbol.Equals(inferredType, this.InferredType, TypeCompareKind.ConsiderEverything) || typeName != this.TypeName || !TypeSymbol.Equals(initializerTypeOpt, this.InitializerTypeOpt, TypeCompareKind.ConsiderEverything) || binder != this.Binder || arguments != this.Arguments)
+            if (!TypeSymbol.Equals(inferredType, this.InferredType, TypeCompareKind.ConsiderEverything) || typeName != this.TypeName || !TypeSymbol.Equals(initializerTypeOpt, this.InitializerTypeOpt, TypeCompareKind.ConsiderEverything) || binder != this.Binder || arguments != this.Arguments || boundWithoutTargetTypedExpression != this.BoundWithoutTargetTypeExpression || boundWithoutTargetTypedDiagnostics != this.BoundWithoutTargetTypeDiagnostics)
             {
-                var result = new BoundUnconvertedInferredClassCreationExpression(this.Syntax, inferredType, typeName, initializerTypeOpt, binder, arguments, this.HasErrors);
+                var result = new BoundUnconvertedInferredClassCreationExpression(this.Syntax, inferredType, typeName, initializerTypeOpt, binder, arguments, boundWithoutTargetTypedExpression, boundWithoutTargetTypedDiagnostics, this.HasErrors);
                 result.CopyAttributes(this);
                 return result;
             }
@@ -10412,7 +10402,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             this.VisitList(node.Arguments);
             return null;
         }
-        public override BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node) => null;
+        public override BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node)
+        {
+            this.Visit(node.BoundWithoutTargetTypeExpression);
+            return null;
+        }
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
             this.VisitList(node.Arguments);
@@ -11682,10 +11676,11 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
         public override BoundNode? VisitUnconvertedInferredClassCreationExpression(BoundUnconvertedInferredClassCreationExpression node)
         {
+            BoundExpression boundWithoutTargetTypedExpression = (BoundExpression)this.Visit(node.BoundWithoutTargetTypeExpression);
             TypeSymbol? inferredType = this.VisitType(node.InferredType);
             TypeSymbol? initializerTypeOpt = this.VisitType(node.InitializerTypeOpt);
             TypeSymbol? type = this.VisitType(node.Type);
-            return node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments);
+            return node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments, boundWithoutTargetTypedExpression, node.BoundWithoutTargetTypeDiagnostics);
         }
         public override BoundNode? VisitObjectCreationExpression(BoundObjectCreationExpression node)
         {
@@ -13896,16 +13891,17 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             TypeSymbol inferredType = GetUpdatedSymbol(node, node.InferredType);
             TypeSymbol? initializerTypeOpt = GetUpdatedSymbol(node, node.InitializerTypeOpt);
+            BoundExpression boundWithoutTargetTypedExpression = (BoundExpression)this.Visit(node.BoundWithoutTargetTypeExpression);
             BoundUnconvertedInferredClassCreationExpression updatedNode;
 
             if (_updatedNullabilities.TryGetValue(node, out (NullabilityInfo Info, TypeSymbol? Type) infoAndType))
             {
-                updatedNode = node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments);
+                updatedNode = node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments, boundWithoutTargetTypedExpression, node.BoundWithoutTargetTypeDiagnostics);
                 updatedNode.TopLevelNullability = infoAndType.Info;
             }
             else
             {
-                updatedNode = node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments);
+                updatedNode = node.Update(inferredType, node.TypeName, initializerTypeOpt, node.Binder, node.Arguments, boundWithoutTargetTypedExpression, node.BoundWithoutTargetTypeDiagnostics);
             }
             return updatedNode;
         }
@@ -16334,6 +16330,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             new TreeDumperNode("initializerTypeOpt", node.InitializerTypeOpt, null),
             new TreeDumperNode("binder", node.Binder, null),
             new TreeDumperNode("arguments", node.Arguments, null),
+            new TreeDumperNode("boundWithoutTargetTypedExpression", null, new TreeDumperNode[] { Visit(node.BoundWithoutTargetTypeExpression, null) }),
+            new TreeDumperNode("boundWithoutTargetTypedDiagnostics", node.BoundWithoutTargetTypeDiagnostics, null),
             new TreeDumperNode("type", node.Type, null),
             new TreeDumperNode("isSuppressed", node.IsSuppressed, null),
             new TreeDumperNode("hasErrors", node.HasErrors, null)

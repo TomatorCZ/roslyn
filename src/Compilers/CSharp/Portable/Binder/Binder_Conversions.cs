@@ -501,15 +501,26 @@ namespace Microsoft.CodeAnalysis.CSharp
             BindingDiagnosticBag diagnostics
             )
         {
-            BoundExpression expr = node.Binder.BindClassCreationExpression(
-                node.Syntax,
-                node.TypeName,
-                node.Syntax.Type,
-                (NamedTypeSymbol)node.InferredType,
-                node.Arguments,
-                diagnostics,
-                node.Syntax.Initializer,
-                node.InitializerTypeOpt);
+            BoundExpression expr;
+            if (conversion.Kind == ConversionKind.InferredClassCreationWithTarget)
+            {
+                expr = node.Binder.BindClassCreationExpression(
+                    node.Syntax,
+                    node.TypeName,
+                    node.Syntax.Type,
+                    (NamedTypeSymbol)node.InferredType,
+                    node.Arguments,
+                    diagnostics,
+                    node.Syntax.Initializer,
+                    node.InitializerTypeOpt,
+                    wasTargetTyped: false, //TODO change for nullable walker
+                    destinationType: destination);
+            }
+            else
+            {
+                expr = node.BoundWithoutTargetTypeExpression;
+                diagnostics.AddRangeAndFree(node.BoundWithoutTargetTypeDiagnostics);
+            }
 
             node.Arguments.Free();
 
