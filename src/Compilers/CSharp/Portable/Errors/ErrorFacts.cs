@@ -207,6 +207,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             // docs/compilers/CSharp/Warnversion Warning Waves.md
             switch (code)
             {
+                case ErrorCode.WRN_TypeHintsInDynamicCall:
+                case ErrorCode.WRN_UnderscoreNamedDisallowed:
+                    // Warning level 8 is exclusively for warnings introduced in the compiler
+                    // shipped with Partial Type Inference feature and that can be reported for pre-existing code.
+                    //TODO: update docs/compilers/CSharp/Warnversion Warning Waves.md
+                    return 9;
                 case ErrorCode.WRN_AddressOfInAsync:
                 case ErrorCode.WRN_ByValArraySizeConstRequired:
                     // Warning level 8 is exclusively for warnings introduced in the compiler
@@ -2410,6 +2416,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case ErrorCode.ERR_CollectionExpressionImmutableArray:
                 case ErrorCode.ERR_InvalidExperimentalDiagID:
                 case ErrorCode.ERR_SpreadMissingMember:
+                case ErrorCode.WRN_TypeHintsInDynamicCall:
+                case ErrorCode.WRN_UnderscoreNamedDisallowed:
                     return false;
                 default:
                     // NOTE: All error codes must be explicitly handled in this switch statement

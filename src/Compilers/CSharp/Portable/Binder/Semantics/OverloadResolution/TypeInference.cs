@@ -12,6 +12,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
@@ -374,10 +375,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             CSharpCompilation compilation,
             ConversionsBase conversions,
             MethodSymbol method,
+            ImmutableArray<TypeParameterSymbol> typeParameters,
             ImmutableArray<BoundExpression> arguments,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            if (!CanInferTypeArgumentsFromFirstArgument(compilation, conversions, method, arguments, ref useSiteInfo, out var inferrer))
+            if (!CanInferTypeArgumentsFromFirstArgument(compilation, conversions, method, typeParameters, arguments, ref useSiteInfo, out var inferrer))
             {
                 return default;
             }
@@ -389,6 +391,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             CSharpCompilation compilation,
             ConversionsBase conversions,
             MethodSymbol method,
+            ImmutableArray<TypeParameterSymbol> typeParameters,
             ImmutableArray<BoundExpression> arguments,
             ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
             out TypeInferrer inferrer,
@@ -408,31 +411,29 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             Debug.Assert(!method.GetParameterType(0).IsDynamic());
 
-            var constructedFromMethod = method.ConstructedFrom;
-
             var targets = ArrayBuilder<TypeWithAnnotations>.GetInstance();
             var sources = ArrayBuilder<BoundExpression>.GetInstance();
             var boundKinds = ArrayBuilder<ExactOrShapeOrBoundsKind>.GetInstance();
 
             //Add first argument
             AddArguments(targets, sources, boundKinds,
-                constructedFromMethod.GetParameterTypes().Take(1).AsImmutable(),
+                method.GetParameterTypes().Take(1).AsImmutable(),
                 arguments.Take(1).AsImmutable(),
-                (!constructedFromMethod.ParameterRefKinds.IsDefault && constructedFromMethod.ParameterRefKinds.Length > 0) ? constructedFromMethod.ParameterRefKinds.Take(1).AsImmutable() : default
+                (!method.ParameterRefKinds.IsDefault && method.ParameterRefKinds.Length > 0) ? method.ParameterRefKinds.Take(1).AsImmutable() : default
             );
 
             //Add type hints
-            AddTypeArguments(targets, sources, boundKinds, constructedFromMethod.TypeParameters, typeArgumentHints);
+            AddTypeArguments(targets, sources, boundKinds, typeParameters, typeArgumentHints);
 
             var typeVariables = ArrayBuilder<TypeSymbol>.GetInstance();
-            typeVariables.AddRange(constructedFromMethod.TypeParameters);
+            typeVariables.AddRange(typeParameters);
             if (!inferredTypeParameters.IsDefault)
                 typeVariables.AddRange(inferredTypeParameters);
 
             inferrer = new TypeInferrer(
                 compilation,
                 conversions,
-                constructedFromMethod.ContainingType,
+                method.ContainingType,
                 typeVariables.ToImmutableAndFree(),
                 targets.ToImmutableAndFree(),
                 sources.ToImmutableAndFree(),
@@ -459,12 +460,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             //Do inference
-            InferTypeVarsFirstPhase(ref useSiteInfo);
+            InferTypeVarsFirstPhase(null, ref useSiteInfo);
             InferTypeVarsSecondPhase(null, ref useSiteInfo);
 
             //Check if the first target doesn't contain unfixed type parameter.
             var substituted = _map.SubstituteType(_targets[0]).Type;
-            if (substituted.IsInferred() || substituted.ContainsMethodTypeParameter())
+            if (substituted.IsInferred() || substituted.ContainsTypeParameters(new HashSet<TypeParameterSymbol>(_typeVariables.Where(x => x.IsTypeParameter()).Cast<TypeParameterSymbol>())))
                 return false;
 
             return true;
@@ -472,7 +473,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private TypeInferenceResult InferTypeVars(Binder binder, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
-            InferTypeVarsFirstPhase(ref useSiteInfo);
+            InferTypeVarsFirstPhase(binder, ref useSiteInfo);
             bool success = InferTypeVarsSecondPhase(binder, ref useSiteInfo);
             var inferredTypeVariables = GetResults(out bool inferredFromFunctionType);
             return new TypeInferenceResult(
@@ -483,7 +484,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         #region The first phase
-        private void InferTypeVarsFirstPhase(ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        private void InferTypeVarsFirstPhase(Binder binder, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
             InitializeDependencies(DependencyKind.Shape);
             InitializeDependencies(DependencyKind.Bound);
@@ -500,20 +501,24 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
                 else
                 {
-                    MakeExplicitParameterTypeInferences(source, target, kind, ref useSiteInfo);
+                    MakeExplicitParameterTypeInferences(binder, source, target, kind, ref useSiteInfo);
                 }
             }
         }
 
-        private void MakeExplicitParameterTypeInferences(BoundExpression source, TypeWithAnnotations target, ExactOrShapeOrBoundsKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        private void MakeExplicitParameterTypeInferences(Binder binder, BoundExpression source, TypeWithAnnotations target, ExactOrShapeOrBoundsKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
             if (source.Kind == BoundKind.UnboundLambda && target.Type.GetDelegateType() is { })
             {
                 ExplicitParameterTypeInference(source, target, ref useSiteInfo);
                 ExplicitReturnTypeInference(source, target, ref useSiteInfo);
             }
+            else if (source.Kind == BoundKind.UnconvertedCollectionExpression)
+            {
+                MakeCollectionExpressionTypeInferences(binder, (BoundUnconvertedCollectionExpression)source, target, kind, ref useSiteInfo);
+            }
             else if (source.Kind != BoundKind.TupleLiteral ||
-                !MakeExplicitParameterTypeInferences((BoundTupleLiteral)source, target, kind, ref useSiteInfo))
+                !MakeExplicitParameterTypeInferences(binder, (BoundTupleLiteral)source, target, kind, ref useSiteInfo))
             {
                 var argumentType = _extensions.GetTypeWithAnnotations(source);
                 if (IsReallyAType(argumentType.Type))
@@ -528,7 +533,64 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        private bool MakeExplicitParameterTypeInferences(BoundTupleLiteral source, TypeWithAnnotations target, ExactOrShapeOrBoundsKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        private void MakeCollectionExpressionTypeInferences(
+            Binder binder,
+            BoundUnconvertedCollectionExpression argument,
+            TypeWithAnnotations target,
+            ExactOrShapeOrBoundsKind kind,
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            TypeSymbol targetType = target.Type;
+            Debug.Assert(targetType is { });
+            if (targetType is null)
+            {
+                return;
+            }
+
+            if (argument.Elements.Length == 0)
+            {
+                return;
+            }
+
+            if (!binder.TryGetCollectionIterationType((ExpressionSyntax)argument.Syntax, targetType.StrippedType(), out TypeWithAnnotations targetElementType))
+            {
+                return;
+            }
+
+            foreach (var element in argument.Elements)
+            {
+                if (element is BoundCollectionExpressionSpreadElement spread)
+                {
+                    MakeSpreadElementTypeInferences(spread, targetElementType, ref useSiteInfo);
+                }
+                else
+                {
+                    MakeExplicitParameterTypeInferences(binder, (BoundExpression)element, targetElementType, kind, ref useSiteInfo);
+                }
+            }
+        }
+
+        private void MakeSpreadElementTypeInferences(
+            BoundCollectionExpressionSpreadElement argument,
+            TypeWithAnnotations target,
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            Debug.Assert(target.Type is { });
+            if (target.Type is null)
+            {
+                return;
+            }
+
+            var enumeratorInfo = argument.EnumeratorInfoOpt;
+            if (enumeratorInfo is null)
+            {
+                return;
+            }
+
+            LowerBoundInference(enumeratorInfo.ElementTypeWithAnnotations, target, ref useSiteInfo);
+        }
+
+        private bool MakeExplicitParameterTypeInferences(Binder binder, BoundTupleLiteral source, TypeWithAnnotations target, ExactOrShapeOrBoundsKind kind, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
             if (target.Type.Kind != SymbolKind.NamedType)
             {
@@ -550,7 +612,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 var sourceArgument = sourceArguments[i];
                 var destType = destTypes[i];
-                MakeExplicitParameterTypeInferences(sourceArgument, destType, kind, ref useSiteInfo);
+                MakeExplicitParameterTypeInferences(binder, sourceArgument, destType, kind, ref useSiteInfo);
             }
 
             return true;
@@ -619,6 +681,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 MakeOutputTypeInferences(binder, (BoundTupleLiteral)source, target, ref useSiteInfo);
             }
+            else if (source.Kind == BoundKind.UnconvertedCollectionExpression)
+            {
+                MakeOutputTypeInferences(binder, (BoundUnconvertedCollectionExpression)source, target, ref useSiteInfo);
+            }
             else
             {
                 if (HasUnfixedParamInOutputType(source, target.Type) && !HasUnfixedParamInInputType(source, target.Type))
@@ -627,6 +693,28 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
         }
+
+        private void MakeOutputTypeInferences(Binder binder, BoundUnconvertedCollectionExpression source, TypeWithAnnotations target, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+        {
+            if (source.Elements.Length == 0)
+            {
+                return;
+            }
+
+            if (!binder.TryGetCollectionIterationType((ExpressionSyntax)source.Syntax, target.Type, out TypeWithAnnotations targetElementType))
+            {
+                return;
+            }
+
+            foreach (var element in source.Elements)
+            {
+                if (element is BoundExpression expression)
+                {
+                    MakeOutputTypeInferences(binder, expression, targetElementType, ref useSiteInfo);
+                }
+            }
+        }
+
 
         private void MakeOutputTypeInferences(Binder binder, BoundTupleLiteral source, TypeWithAnnotations target, ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
         {
@@ -2597,6 +2685,13 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 MergeOrRemoveCandidates(candidates, upper, initialCandidates, conversions, VarianceKind.In, ref useSiteInfo);
             }
+            if (!shape.IsDefault)
+            {
+                var shapeSet = new HashSet<TypeWithAnnotations> { shape };
+                initialCandidates.Clear();
+                initialCandidates.AddRange(candidates.Select(x => x.Value));
+                MergeOrRemoveCandidates(candidates, shapeSet, initialCandidates, conversions, VarianceKind.In, ref useSiteInfo, withNullability: true);
+            }
 
             initialCandidates.Clear();
             GetAllCandidates(candidates, initialCandidates);
@@ -2766,7 +2861,8 @@ OuterBreak:
             ArrayBuilder<TypeWithAnnotations> initialCandidates,
             ConversionsBase conversions,
             VarianceKind variance,
-            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo)
+            ref CompoundUseSiteInfo<AssemblySymbol> useSiteInfo,
+            bool withNullability = false)
         {
             Debug.Assert(variance == VarianceKind.In || variance == VarianceKind.Out);
             var comparison = conversions.IncludeNullability ? TypeCompareKind.ConsiderEverything : TypeCompareKind.IgnoreNullableModifiersForReferenceTypes;
@@ -2790,7 +2886,7 @@ OuterBreak:
                         source = candidate;
                         destination = bound;
                     }
-                    if (!ImplicitConversionExists(source, destination, ref useSiteInfo, conversions))
+                    if (!ImplicitConversionExists(source, destination, ref useSiteInfo, conversions.WithNullability(withNullability)))
                     {
                         candidates.Remove(candidate);
                         if (conversions.IncludeNullability && candidates.TryGetValue(bound, out var oldBound))

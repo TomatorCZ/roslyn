@@ -3752,6 +3752,7 @@ outerDefault:
                     _binder.Compilation,
                     _binder.Conversions,
                     method.Construct(renamedTypeParameters.CastArray<TypeSymbol>()),
+                    renamedTypeParameters,
                     args,
                     useSiteInfo: ref useSiteInfo,
                     out _,

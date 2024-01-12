@@ -4878,6 +4878,11 @@
         <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WRN_TypeHintsInDynamicCall_Title">
+        <source>Type hints will not be considered in type inference of dynamic call.</source>
+        <target state="new">Type hints will not be considered in type inference of dynamic call.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WRN_TypeParameterSameAsOuterMethodTypeParameter">
         <source>Type parameter '{0}' has the same name as the type parameter from outer method '{1}'</source>
         <target state="translated">El parámetro de tipo "{0}" tiene el mismo nombre que el parámetro de tipo del método externo "{1}"</target>
@@ -4959,6 +4964,11 @@
         <note />
       </trans-unit>
       <trans-unit id="WRN_UnderscoreNamedDisallowed">
+        <source>Types and aliases should not be named '_'.</source>
+        <target state="new">Types and aliases should not be named '_'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WRN_UnderscoreNamedDisallowed_Title">
         <source>Types and aliases should not be named '_'.</source>
         <target state="new">Types and aliases should not be named '_'.</target>
         <note />

@@ -285,6 +285,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             _extensions.IsRefLikeType(DefaultType);
         public bool IsStatic =>
             _extensions.IsStatic(DefaultType);
+
+        public bool IsInferredType =>
+            _extensions.IsInferredType(DefaultType);
+
         public bool IsRestrictedType(bool ignoreSpanLikeTypes = false) =>
             _extensions.IsRestrictedType(DefaultType, ignoreSpanLikeTypes);
 
@@ -888,6 +892,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal abstract SpecialType GetSpecialType(TypeSymbol typeSymbol);
             internal abstract bool IsRestrictedType(TypeSymbol typeSymbol, bool ignoreSpanLikeTypes);
             internal abstract bool IsStatic(TypeSymbol typeSymbol);
+            internal abstract bool IsInferredType(TypeSymbol typeSymbol);
             internal abstract bool IsVoid(TypeSymbol typeSymbol);
             internal abstract bool IsSZArray(TypeSymbol typeSymbol);
             internal abstract bool IsRefLikeType(TypeSymbol typeSymbol);
@@ -919,6 +924,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal override SpecialType GetSpecialType(TypeSymbol typeSymbol) => typeSymbol.SpecialType;
             internal override bool IsRestrictedType(TypeSymbol typeSymbol, bool ignoreSpanLikeTypes) => typeSymbol.IsRestrictedType(ignoreSpanLikeTypes);
             internal override bool IsStatic(TypeSymbol typeSymbol) => typeSymbol.IsStatic;
+            internal override bool IsInferredType(TypeSymbol typeSymbol) => typeSymbol.TypeKind != TypeKindInternal.InferredType;
             internal override bool IsVoid(TypeSymbol typeSymbol) => typeSymbol.IsVoidType();
             internal override bool IsSZArray(TypeSymbol typeSymbol) => typeSymbol.IsSZArray();
             internal override bool IsRefLikeType(TypeSymbol typeSymbol) => typeSymbol.IsRefLikeType;
@@ -991,6 +997,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal override SpecialType GetSpecialType(TypeSymbol typeSymbol) => typeSymbol.SpecialType;
             internal override bool IsRestrictedType(TypeSymbol typeSymbol, bool ignoreSpanLikeTypes) => typeSymbol.IsRestrictedType(ignoreSpanLikeTypes);
             internal override bool IsStatic(TypeSymbol typeSymbol) => typeSymbol.IsStatic;
+            internal override bool IsInferredType(TypeSymbol typeSymbol) => typeSymbol.TypeKind == TypeKindInternal.InferredType;
             internal override bool IsVoid(TypeSymbol typeSymbol) => typeSymbol.IsVoidType();
             internal override bool IsSZArray(TypeSymbol typeSymbol) => typeSymbol.IsSZArray();
             internal override bool IsRefLikeType(TypeSymbol typeSymbol) => typeSymbol.IsRefLikeType;
@@ -1095,6 +1102,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             internal override bool IsSZArray(TypeSymbol typeSymbol) => false;
             internal override bool IsRefLikeType(TypeSymbol typeSymbol) => false;
             internal override bool IsStatic(TypeSymbol typeSymbol) => false;
+            internal override bool IsInferredType(TypeSymbol typeSymbol) => false;
 
             private TypeSymbol GetResolvedType()
             {

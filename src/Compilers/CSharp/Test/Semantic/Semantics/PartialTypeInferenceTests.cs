@@ -315,7 +315,7 @@ class P {
         C2<int, string> temp7 = new C2<int, string>();
         C2<int, string?> temp8 = new C2<int, string?>();
         C2<string?, int> temp9 = new C2<string?, int>();
-
+        
         F8<int, _>(temp5); //-P.F8<int, string>(string?)
         F8<int, _>(temp6); //-P.F8<int, string>(string?)
         F8<int?, _>(temp5); //-P.F8<int?, string>(string?)
@@ -369,7 +369,6 @@ class P {
                             Diagnostic(ErrorCode.ERR_CantInferMethTypeArgs, "F10<Nullable<_>>").WithArguments("P.F10<T1>(T1)").WithLocation(40, 9)
                        )
     );
-            //TODO: Signatures
         }
 
         [Fact]

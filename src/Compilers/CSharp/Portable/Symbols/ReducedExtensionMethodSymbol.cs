@@ -152,10 +152,14 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 arguments[i] = argument;
             }
 
+            var renamedTypeParameters = method.TypeParameters.Select(x => (TypeParameterSymbol)new RenamedTypeParameterSymbol(x)).ToImmutableArray();
+            var map = new TypeMap(method.TypeParameters, renamedTypeParameters, true);
+
             var typeArgs = TypeInferrer.InferTypeArgumentsFromFirstArgument(
                 compilation,
                 conversions,
-                method,
+                method.Construct(renamedTypeParameters.Select(x => TypeWithAnnotations.Create(x)).ToImmutableArray()),
+                renamedTypeParameters,
                 arguments.AsImmutable(),
                 useSiteInfo: ref useSiteInfo);
 

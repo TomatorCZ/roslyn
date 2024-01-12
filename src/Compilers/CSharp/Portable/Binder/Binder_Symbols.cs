@@ -635,7 +635,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             TypeWithAnnotations type = BindType(node.ElementType, diagnostics, basesBeingResolved, allowInferredType: allowInferredElementType);
 
             // We don't know at this time which type will have the elements.
-            if (type.TypeKind != TypeKindInternal.InferredType)
+            if (type.IsInferredType)
             {
                 if (type.IsStatic)
                 {
