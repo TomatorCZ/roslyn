@@ -231,10 +231,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             ImmutableArray<RefKind> formalParameterRefKinds,
             HashSet<TypeParameterSymbol> typeParameters)
         {
-            if (parameterTypes.IsDefault || arguments.IsDefault || parameterTypes.Length != arguments.Length )
+            if (parameterTypes.IsDefault || arguments.IsDefault)
                 return;
 
-            for (int i = 0; i < parameterTypes.Length; i++)
+            int min = Math.Min(parameterTypes.Length, arguments.Length);
+            for (int i = 0; i < min; i++)
             {
                 targets.Add(parameterTypes[i]);
                 //Don't forget to add diagnostics.
