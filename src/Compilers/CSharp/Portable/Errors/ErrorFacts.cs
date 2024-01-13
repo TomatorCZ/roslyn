@@ -2418,6 +2418,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case ErrorCode.ERR_SpreadMissingMember:
                 case ErrorCode.WRN_TypeHintsInDynamicCall:
                 case ErrorCode.WRN_UnderscoreNamedDisallowed:
+                case ErrorCode.ERR_TypeHintsInDynamicObjectCreation:
                     return false;
                 default:
                     // NOTE: All error codes must be explicitly handled in this switch statement

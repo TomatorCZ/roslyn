@@ -827,7 +827,7 @@ outerDefault:
                 useSiteInfo: ref useSiteInfo,
                 destinationType: destinationType);
 
-            return result.IsValid ? new MemberResolutionResult<MethodSymbol>(result.Member, result.LeastOverriddenMember, MemberAnalysisResult.ExpandedForm(result.Result.ArgsToParamsOpt, result.Result.ConversionsOpt, hasAnyRefOmittedArgument: false), false) : result;
+            return result.IsValid ? new MemberResolutionResult<MethodSymbol>(result.Member, result.LeastOverriddenMember, MemberAnalysisResult.ExpandedForm(result.Result.ArgsToParamsOpt, result.Result.ConversionsOpt, hasAnyRefOmittedArgument: false), false, result.UninferredMember) : result;
         }
 
         private void AddMemberToCandidateSet<TMember>(
@@ -3796,6 +3796,7 @@ outerDefault:
             EffectiveParameters effectiveParameters;
             bool hasTypeArgumentsInferredFromFunctionType = false;
             ImmutableArray<bool> typeParamInParamIndicator = default;
+            MethodSymbol uninferredCtor = constructor;
 
             if (contatiningType.Arity > 0 && contatiningType.IsInferred())
             {
@@ -3834,7 +3835,7 @@ outerDefault:
                 {
                     hasTypeArgumentsInferredFromFunctionType = false;
                     inferenceError = MemberAnalysisResult.TypeInferenceFailed();
-                    return new MemberResolutionResult<MethodSymbol>(constructor.OriginalDefinition, constructor.OriginalDefinition, inferenceError, false);
+                    return new MemberResolutionResult<MethodSymbol>(constructor.OriginalDefinition, constructor.OriginalDefinition, inferenceError, false, uninferredCtor);
                 }
 
                 NamedTypeSymbol inferredType = genericType.Construct(inferenceResult.InferredTypeArguments);
@@ -3845,7 +3846,7 @@ outerDefault:
                 {
                     if (!parameterTypes[i].Type.CheckAllConstraints(Compilation, Conversions))
                     {
-                        return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.ConstructedParameterFailedConstraintsCheck(i), false);
+                        return new MemberResolutionResult<MethodSymbol>(constructor, constructor, MemberAnalysisResult.ConstructedParameterFailedConstraintsCheck(i), false, uninferredCtor);
                     }
                 }
 
@@ -3873,7 +3874,7 @@ outerDefault:
                 useSiteInfo: ref useSiteInfo,
                 typeParamInParamIndicator: typeParamInParamIndicator);
 
-            return new MemberResolutionResult<MethodSymbol>(constructor, constructor, applicableResult, hasTypeArgumentsInferredFromFunctionType);
+            return new MemberResolutionResult<MethodSymbol>(constructor, constructor, applicableResult, hasTypeArgumentsInferredFromFunctionType, uninferredCtor);
         }
 
         private MemberAnalysisResult IsApplicable(

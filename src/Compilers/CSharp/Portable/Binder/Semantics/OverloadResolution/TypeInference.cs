@@ -425,8 +425,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             AddArguments(targets, sources, boundKinds,
                 method.GetParameterTypes().Take(1).AsImmutable(),
                 arguments.Take(1).AsImmutable(),
-                (!method.ParameterRefKinds.IsDefault && method.ParameterRefKinds.Length > 0) ? method.ParameterRefKinds.Take(1).AsImmutable() : default
-                (!constructedFromMethod.ParameterRefKinds.IsDefault && constructedFromMethod.ParameterRefKinds.Length > 0) ? constructedFromMethod.ParameterRefKinds.Take(1).AsImmutable() : default,
+                (!method.ParameterRefKinds.IsDefault && method.ParameterRefKinds.Length > 0) ? method.ParameterRefKinds.Take(1).AsImmutable() : default,
                 new HashSet<TypeParameterSymbol>(method.TypeParameters)
             );
 

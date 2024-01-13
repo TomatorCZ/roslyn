@@ -488,8 +488,13 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal static bool IsReservedTypeNameInternal(string? name, SyntaxNode node)
         {
-            return name is { Length: > 0 } && (name.All(c => c >= 'a' && c <= 'z')
-            || (name == "_" && node != null && (node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference))));
+            return name is { Length: > 0 } && (
+                name.All(c => c >= 'a' && c <= 'z') || (
+                    name == "_" && node != null && (
+                        node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference) || node.IsFeatureEnabled(MessageID.IDS_FeaturePartialConstructorTypeInference)
+                    )
+                )
+            );
         }
 
         internal static void ReportReservedTypeName(string? name, CSharpCompilation compilation, DiagnosticBag? diagnostics, Location location)
@@ -499,7 +504,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 return;
             }
 
-            if (reportIfContextualAndFeatureEnabled(SyntaxKind.UnderscoreToken, MessageID.IDS_FeaturePartialMethodTypeInference, ErrorCode.WRN_UnderscoreNamedDisallowed)
+            if (reportIfContextualAndFeatureEnabled(SyntaxKind.UnderscoreToken, MessageID.IDS_FeaturePartialMethodTypeInference, ErrorCode.WRN_UnderscoreNamedDisallowed) 
+                || reportIfContextualAndFeatureEnabled(SyntaxKind.UnderscoreToken, MessageID.IDS_FeaturePartialConstructorTypeInference, ErrorCode.WRN_UnderscoreNamedDisallowed)
                 || reportIfContextual(SyntaxKind.RecordKeyword, MessageID.IDS_FeatureRecords, ErrorCode.WRN_RecordNamedDisallowed)
                 || reportIfContextual(SyntaxKind.RequiredKeyword, MessageID.IDS_FeatureRequiredMembers, ErrorCode.ERR_RequiredNameDisallowed)
                 || reportIfContextual(SyntaxKind.FileKeyword, MessageID.IDS_FeatureFileTypes, ErrorCode.ERR_FileTypeNameDisallowed)

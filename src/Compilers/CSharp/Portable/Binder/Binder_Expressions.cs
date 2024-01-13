@@ -6196,7 +6196,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                 !type.IsAbstract)
             {
                 var method = memberResolutionResult.Member;
-                type = method.ContainingType;
+                if (!type.IsErrorType())
+                    type = method.ContainingType;
 
                 bool hasError = false;
 
@@ -6625,7 +6626,13 @@ namespace Microsoft.CodeAnalysis.CSharp
                 }
             }
 
-            candidateConstructors = result.Results.SelectAsArray(x => x.Member);
+            var resolutedCtors = result.Results.Where(x => x.UninferredMember != null).ToDictionary(x => x.UninferredMember);
+            candidateConstructors = candidateConstructors.Select(x => {
+                if (resolutedCtors.ContainsKey(x))
+                    return resolutedCtors[x].Member;
+                else
+                    return x;
+            }).ToImmutableArray();
 
             result.Free();
             return succeededConsideringAccessibility;

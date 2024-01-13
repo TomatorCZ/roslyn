@@ -25,17 +25,17 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal override TypeSymbol GetDeducedBaseType(ConsList<TypeParameterSymbol> inProgress)
         {
-            throw new InvalidOperationException();
+            return _underlyingTypeParameter.GetDeducedBaseType(inProgress);
         }
 
         internal override NamedTypeSymbol GetEffectiveBaseClass(ConsList<TypeParameterSymbol> inProgress)
         {
-            throw new InvalidOperationException();
+            return _underlyingTypeParameter.GetEffectiveBaseClass(inProgress);
         }
 
         internal override ImmutableArray<NamedTypeSymbol> GetInterfaces(ConsList<TypeParameterSymbol> inProgress)
         {
-            throw new InvalidOperationException();
+            return _underlyingTypeParameter.GetInterfaces(inProgress);
         }
     }
 }
