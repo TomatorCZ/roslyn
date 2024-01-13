@@ -483,7 +483,13 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal static bool IsReservedTypeName(string? name)
         {
-            return name is { Length: > 0 } && name.All(c => c >= 'a' && c <= 'z');
+            return name is { Length: > 0 } && (name.All(c => c >= 'a' && c <= 'z') || name == "_");
+        }
+
+        internal static bool IsReservedTypeNameInternal(string? name, SyntaxNode node)
+        {
+            return name is { Length: > 0 } && (name.All(c => c >= 'a' && c <= 'z')
+            || (name == "_" && node != null && (node.IsFeatureEnabled(MessageID.IDS_FeaturePartialMethodTypeInference))));
         }
 
         internal static void ReportReservedTypeName(string? name, CSharpCompilation compilation, DiagnosticBag? diagnostics, Location location)
@@ -501,7 +507,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             {
                 return;
             }
-            else if (IsReservedTypeName(name))
+            else if (IsReservedTypeNameInternal(name, location.SourceTree?.GetRoot()))
             {
                 diagnostics.Add(ErrorCode.WRN_LowerCaseTypeName, location, name);
             }
