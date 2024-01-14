@@ -6250,7 +6250,15 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             if (type.IsInferred())
+            {
                 type = CreateErrorType(typeName);
+                initializerTypeOpt = null;
+            }
+
+            if (!TypeSymbol.Equals(initializerTypeOpt, null) && initializerTypeOpt.IsInferred())
+            {
+                initializerTypeOpt = type;
+            }
 
             LookupResultKind resultKind;
 

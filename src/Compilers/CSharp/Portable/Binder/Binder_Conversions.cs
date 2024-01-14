@@ -513,7 +513,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     diagnostics,
                     node.Syntax.Initializer,
                     node.InitializerTypeOpt,
-                    wasTargetTyped: false, //TODO change for nullable walker
+                    wasTargetTyped: true,
                     destinationType: destination);
             }
             else

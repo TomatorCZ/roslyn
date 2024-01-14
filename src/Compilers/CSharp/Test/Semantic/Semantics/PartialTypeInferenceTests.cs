@@ -493,7 +493,6 @@ class P
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "_").WithArguments("_").WithLocation(34, 29)
             )
     );
-            //TODO: Signatures
         }
 
         [Fact]
@@ -745,26 +744,21 @@ class Program
 {
     void M() 
     {
-        // Inferred: [T1 = int, T2 = int, T3 = int, T4 = int, T5 = C1<int>]
-        // Combinining type constraints from target, constructor, type argument list, object initializer and where clause to determine type of parameters
-        F1(new C9<_,_,_,int,_>(1) {Prop1 = 1},1);
+        F1(new C9<_,_,int,_>(1), 1); //-Program.C9<int, int, int, Program.C1<int>>..ctor(int)
     }
 
-    void F1<T>(C1<T> p1, T p2) {}
+    void F1<T>(C1<int> p1, T p2) {}
 
     class C1<T> {}
 
-    class C9<T1, T2, T3, T4, T5> : C1<T3> where T5 : C1<T4>
+    class C9<T1, T2, T3, T4> : C1<T2> where T4 : C1<T3>
     {
         public C9(T1 p1) {}
-        public T2 Prop1 {get;set;}
     }
 }
 """,
         Symbols.ObjectCreation
     );
-
-            //TODO: Signatures
         }
 
         [Fact]
@@ -889,23 +883,22 @@ class P
 {
     void M() 
     {
-        // Inferred: [T = string?]
+        //string temp0 = "";
+        //new C1<_?>(temp0); //+-P.C1<string?>..ctor(string?)
+        //
+        //new C1<_>(temp0); //+-P.C1<string>..ctor(string)
+
         string? temp1 = null;
-        var temp2 = new C1<_?>(temp1);
-        C1<string?> temp3 = temp2;
+        //new C1<_?>(temp1); //+-P.C1<string?>..ctor(string?)
+        //
+        //new C1<_>(temp1); //+-P.C1<string?>..ctor(string?)
+        //
+        //F1(new C2<_?>(), temp1); //+-P.C2<string?>..ctor()
 
-        // Inferred: [T = string?]
-        temp3 = new C1<_?>(temp1);
-
-        //Inferred: [T = string?]
-        F1(new C2<_?>(), temp1);
-
-        //Inferred: [T = string?]
-        new C3<_?> {Prop1 = temp1};
-        
+        F1(new C2<_>(), temp1); //-P.C2<string?>..ctor()
     }
 
-    void F1<T>(C2<T> p1, T p2) {}
+    void F1<T>(C2<string?> p1, T p2) {}
 
     class C2<T> 
     {
@@ -916,17 +909,10 @@ class P
     {
         public C1(T p1) {}
     }
-
-    class C3<T> 
-    {
-       public T Prop1 {get;set;}
-    }
 }
 """,
         Symbols.ObjectCreation
     );
-
-            //TODO: Signatures
         }
         #endregion
     }
