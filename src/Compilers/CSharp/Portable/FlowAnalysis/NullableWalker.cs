@@ -3540,6 +3540,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             Debug.Assert(!IsConditionalState);
             bool isTargetTyped = node.WasTargetTyped;
+            bool isInferred = node is BoundObjectCreationExpression expr && !expr.OriginalTypeArgsOpt.IsDefault && expr.OriginalTypeArgsOpt.Any(x => x.IsInferredType);
             MethodSymbol? constructor = getConstructor(node, node.Type);
             var arguments = node.Arguments;
 
@@ -3550,7 +3551,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                            constructor, delayCompletionForTargetMember: isTargetTyped);
             Debug.Assert(isTargetTyped == argumentsCompletion is not null);
 
-            var type = s.ContainingType;
+            var type = (isInferred ? s?.ContainingType : node.Type) ?? node.Type;
             (int slot, NullableFlowState resultState, Func<TypeSymbol, MethodSymbol?, int>? initialStateInferenceCompletion) = inferInitialObjectState(node, type, constructor, arguments, argumentResults, isTargetTyped);
 
             Action<int, TypeSymbol>? initializerCompletion = null;
@@ -3629,7 +3630,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         int slot = initialStateInferenceCompletion(type, constructor);
                         initializerCompletion?.Invoke(slot, type);
 
-                        if (!inferredCtor.ContainingType.Equals(node.Type, TypeCompareKind.ConsiderEverything) && inferred)
+                        if (inferred && inferredCtor != null && !inferredCtor.ContainingType.Equals(node.Type, TypeCompareKind.ConsiderEverything))
                             SetUpdatedSymbol(node, node.Constructor, inferredCtor);
 
                         return setAnalyzedNullability(
